@@ -1015,6 +1015,95 @@ router.post('/audio-cache/prune', requireAdmin, (req, res) => {
 });
 
 // ============================================================
+// Multi-language audio variants (admin manual upload)
+// ============================================================
+// These endpoints let the admin upload alternate-language audio files
+// for any sequence that already has a default track in the cache.
+// The FPP plugin only uploads the default/primary track; language
+// variants are managed manually here.
+//
+// GET  /audio-cache/languages/:sequence  — list available languages
+// POST /audio-cache/languages/:sequence  — upload a variant (raw body)
+// DELETE /audio-cache/languages/:sequence/:lang — remove a variant
+
+router.get('/audio-cache/languages/:sequence', requireAdmin, (req, res) => {
+  const audioCache = require('../lib/audio-cache');
+  const seqName = decodeURIComponent(req.params.sequence);
+  try {
+    const languages = audioCache.getLanguagesForSequence(seqName);
+    res.json({ ok: true, sequenceName: seqName, languages });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post(
+  '/audio-cache/languages/:sequence',
+  requireAdmin,
+  express.raw({ type: '*/*', limit: '50mb' }),
+  (req, res) => {
+    const audioCache = require('../lib/audio-cache');
+    const { getSequenceByName } = require('../lib/db');
+    const seqName = decodeURIComponent(req.params.sequence);
+    const lang = String(req.query.lang || '').toLowerCase().trim();
+    const claimedHash = String(req.query.hash || '').toLowerCase();
+    const mimeType = req.query.mimeType
+      ? String(req.query.mimeType)
+      : (req.headers['content-type'] || 'audio/mpeg');
+
+    if (!lang || lang === 'default') {
+      return res.status(400).json({ error: 'lang query param required and must not be "default"' });
+    }
+    if (!/^[a-z]{2,10}$/.test(lang)) {
+      return res.status(400).json({ error: 'lang must be 2-10 lowercase letters (e.g. "es", "fr")' });
+    }
+    if (!audioCache.isValidHash(claimedHash)) {
+      return res.status(400).json({ error: 'Invalid hash format' });
+    }
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+      return res.status(400).json({ error: 'Empty body — expected raw audio bytes' });
+    }
+
+    // Sequence must exist and have a media_name — we key language rows by media_name
+    const seq = getSequenceByName(seqName);
+    if (!seq) return res.status(404).json({ error: 'Sequence not found' });
+    if (!seq.media_name) {
+      return res.status(400).json({ error: 'Sequence has no media_name — sync with FPP first' });
+    }
+
+    try {
+      audioCache.storeLanguageFile(req.body, claimedHash, seq.media_name, lang, mimeType);
+      console.log(`[admin/language-upload] stored ${lang} variant for "${seqName}" (${req.body.length} bytes)`);
+      res.json({ ok: true, sequenceName: seqName, lang, hash: claimedHash, sizeBytes: req.body.length });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+);
+
+router.delete('/audio-cache/languages/:sequence/:lang', requireAdmin, (req, res) => {
+  const audioCache = require('../lib/audio-cache');
+  const { getSequenceByName } = require('../lib/db');
+  const seqName = decodeURIComponent(req.params.sequence);
+  const lang = String(req.params.lang || '').toLowerCase();
+
+  if (lang === 'default') {
+    return res.status(400).json({ error: 'Cannot delete the default track via this endpoint' });
+  }
+
+  const seq = getSequenceByName(seqName);
+  if (!seq) return res.status(404).json({ error: 'Sequence not found' });
+  if (!seq.media_name) return res.status(400).json({ error: 'Sequence has no media_name' });
+
+  try {
+    const deleted = audioCache.deleteLanguageFile(seq.media_name, lang);
+    res.json({ ok: true, deleted });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================================
 // Viewer Page Templates (CRUD)
 // ============================================================
 
@@ -1784,15 +1873,20 @@ router.get('/qr-code', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'public_base_url not configured' });
   }
   try {
-    const png = await QRCode.toBuffer(url, {
-      type: 'png',
-      width: 300,
+    // SVG output scales perfectly at any size — no pixelation when printed
+    // or displayed on large screens. The viewBox is set by the qrcode library
+    // automatically; width/height are omitted so CSS controls the display size.
+    const svg = await QRCode.toString(url, {
+      type: 'svg',
       margin: 2,
       color: { dark: '#000000', light: '#ffffff' },
     });
-    res.set('Content-Type', 'image/png');
+    // Strip the fixed width/height attrs the library adds so the SVG scales
+    // freely via CSS on the client side.
+    const scalable = svg.replace(/(<svg[^>]*)\s+width="[^"]*"\s+height="[^"]*"/, '$1');
+    res.set('Content-Type', 'image/svg+xml');
     res.set('Cache-Control', 'private, max-age=3600');
-    res.send(png);
+    res.send(scalable);
   } catch (err) {
     console.error('[qr-code] generation failed:', err.message);
     res.status(500).json({ error: 'QR generation failed' });

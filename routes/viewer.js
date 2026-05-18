@@ -950,6 +950,16 @@ router.get('/now-playing-audio', (req, res) => {
     publicStreamUrl: cfg.public_base_url
       ? `${String(cfg.public_base_url).replace(/\/+$/, '')}/api/audio-stream/${encodeURIComponent(seq.name)}${versionParam}`
       : '',
+    // Language variants available for this sequence. Empty array means only
+    // the default track exists and the language picker should stay hidden.
+    // When two or more entries exist (e.g. ['default','es']), rf-compat shows
+    // a language toggle in the player bar so viewers can switch.
+    languages: (() => {
+      try {
+        const audioCache = require('../lib/audio-cache');
+        return audioCache.getLanguagesForSequence(seq.name);
+      } catch (_) { return []; }
+    })(),
     // Relay URL — try this first for live sync. Falls back to streamUrl if relay
     // is not active (503 response). Relay is same-origin only (LAN/local listeners);
     // external listeners use publicStreamUrl which goes through the cache path.
@@ -1078,7 +1088,11 @@ router.get('/audio-stream/:sequence', async (req, res) => {
   // with installs that haven't upgraded their plugin yet.
   try {
     const audioCache = require('../lib/audio-cache');
-    const cachedFile = audioCache.getCachedFileForSequence(seq.name);
+    // Accept ?lang=XX for multi-language audio variants. 'default' and
+    // absent both resolve to the primary track. Unknown languages fall
+    // back to the default track automatically inside getCachedFileForSequence.
+    const requestedLang = req.query.lang ? String(req.query.lang).toLowerCase().slice(0, 10) : 'default';
+    const cachedFile = audioCache.getCachedFileForSequence(seq.name, requestedLang);
     if (cachedFile) {
       // Aggressive caching for cellular listeners. Audio file bytes are
       // immutable — same hash, same content. Cloudflare or other edge
@@ -1096,6 +1110,9 @@ router.get('/audio-stream/:sequence', async (req, res) => {
       // in browser dev tools without server log access. Visible under
       // the Network tab → click request → Response Headers.
       res.setHeader('X-Audio-Source', 'cache');
+      // Tell the viewer which language is actually being served — useful
+      // when a fallback to 'default' occurred (requested lang wasn't found).
+      res.setHeader('X-Audio-Language', cachedFile.language || 'default');
       // sendFile handles Range/304/Accept-Ranges automatically. Browser
       // gets sample-precise seeking exactly as it would from FPP.
       return res.sendFile(cachedFile.path, (err) => {

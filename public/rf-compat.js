@@ -2333,6 +2333,32 @@
         color: #ef4444 !important;
       }
 
+      /* Language picker buttons */
+      .of-lang-btn {
+        background: rgba(255,255,255,0.1);
+        border: 1px solid rgba(255,255,255,0.2);
+        color: rgba(255,255,255,0.75);
+        border-radius: 4px;
+        padding: 3px 9px;
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
+        line-height: 1.4;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      .of-lang-btn:hover {
+        background: rgba(255,255,255,0.18);
+        color: #fff;
+      }
+      .of-lang-btn.of-lang-active {
+        background: rgba(255,255,255,0.25);
+        border-color: rgba(255,255,255,0.6);
+        color: #fff;
+      }
+
       /* Marquee scroll for long titles/artists */
       @keyframes ofMarquee {
         0%   { transform: translateX(0); }
@@ -2424,6 +2450,12 @@
           </svg>
         </button>
       </div>
+      <div id="of-lang-row" style="display:none; max-width:800px; margin:6px auto 0;
+           padding-top:8px; border-top:1px solid rgba(255,255,255,0.1);
+           gap:6px; align-items:center; flex-wrap:wrap;">
+        <span style="font-size:11px; color:rgba(255,255,255,0.5); flex-shrink:0;">&#x1F310; Language:</span>
+        <div id="of-lang-btns" style="display:flex; gap:5px; flex-wrap:wrap;"></div>
+      </div>
     `;
 
     // ---- Minimized "still playing" pill ----
@@ -2473,6 +2505,67 @@
     const minBtn = panel.querySelector('#of-listen-min');
     const closeBtn = panel.querySelector('#of-listen-close');
     const pillText = minimizedPill.querySelector('#of-listen-pill-text');
+    const langRow = panel.querySelector('#of-lang-row');
+    const langBtns = panel.querySelector('#of-lang-btns');
+
+    // ---- Language picker ----
+    // Renders language toggle buttons when the current sequence has variants.
+    // Hidden when only 'default' is available (single-language show).
+    // Called after each now-playing-audio poll with the latest languages array.
+    function updateLanguagePicker(languages) {
+      availableLanguages = Array.isArray(languages) ? languages : [];
+      // Guard: langRow/langBtns are only available after the panel is built
+      if (!langRow || !langBtns) return;
+      // Only show picker when there are at least 2 options (default + 1 variant)
+      const hasVariants = availableLanguages.length >= 2;
+      langRow.style.display = hasVariants ? 'flex' : 'none';
+      if (!hasVariants) return;
+
+      // Rebuild buttons only when the language list changed
+      const rendered = langBtns.dataset.rendered || '';
+      const key = availableLanguages.join(',');
+      if (rendered === key) {
+        // Just update active state
+        langBtns.querySelectorAll('.of-lang-btn').forEach(b => {
+          b.classList.toggle('of-lang-active', b.dataset.lang === selectedLang);
+        });
+        return;
+      }
+      langBtns.dataset.rendered = key;
+      langBtns.innerHTML = '';
+
+      // Label map for common codes — falls back to uppercase code
+      const LABELS = {
+        default: 'Default', en: 'EN', es: 'ES', fr: 'FR', de: 'DE',
+        it: 'IT', pt: 'PT', zh: 'ZH', ja: 'JA', ko: 'KO',
+        ru: 'RU', ar: 'AR', hi: 'HI', pl: 'PL', nl: 'NL',
+      };
+
+      availableLanguages.forEach(lang => {
+        const btn = document.createElement('button');
+        btn.className = 'of-lang-btn';
+        btn.dataset.lang = lang;
+        btn.textContent = LABELS[lang] || lang.toUpperCase();
+        btn.title = lang === 'default' ? 'Default audio track' : lang.toUpperCase();
+        if (lang === selectedLang) btn.classList.add('of-lang-active');
+        btn.addEventListener('click', () => {
+          if (lang === selectedLang) return;
+          selectedLang = lang;
+          try { localStorage.setItem('sp_audio_lang', lang); } catch(_) {}
+          // Update active state immediately
+          langBtns.querySelectorAll('.of-lang-btn').forEach(b => {
+            b.classList.toggle('of-lang-active', b.dataset.lang === selectedLang);
+          });
+          // Force a track reload with the new language.
+          // Wipe the buffer cache for the current sequence so handleTrackChange
+          // fetches fresh bytes with ?lang=XX instead of playing the cached default.
+          if (currentSequence) decodedBufferCache.delete(currentSequence);
+          prefetchedSeq = null;
+          currentSequence = null; // triggers handleTrackChange on next poll
+        });
+        langBtns.appendChild(btn);
+      });
+    }
 
     // ============================================================
     // SHOW-NOT-PLAYING STATE
@@ -2628,6 +2721,15 @@
     // Incremented on every stopAudio/teardown/track-change so in-flight async
     // operations (scheduled play, clock fetch) can detect they're stale and bail.
     let playGeneration = 0;
+
+    // Multi-language audio: the viewer's chosen language code, persisted to
+    // localStorage as 'sp_audio_lang'. 'default' means play the primary track.
+    // When the current sequence has variants, a language picker appears in the
+    // player bar. Changing language triggers a full track reload.
+    let selectedLang = (() => {
+      try { return localStorage.getItem('sp_audio_lang') || 'default'; } catch(_) { return 'default'; }
+    })();
+    let availableLanguages = []; // populated from now-playing-audio response
 
     // The HTML5 <audio> element used for playback. We use HTML5 audio
     // (rather than Web Audio API) because it provides much better
@@ -3394,6 +3496,12 @@
           return;
         }
 
+        // Update language picker regardless of play state — variants are
+        // sequence-specific and should show as soon as the panel is open,
+        // even before audio starts or between songs. Must run before the
+        // early-return below so it's never skipped.
+        updateLanguagePicker(data.languages || []);
+
         if (!data.playing || !data.hasAudio) {
           if (currentSource) stopAudio();
           titleEl.textContent = data.playing ? 'No audio for this sequence' : 'Show is not playing';
@@ -3419,6 +3527,18 @@
 
         // Apply decoration theme (cheap — only does work if it changed)
         applyDecoration(data.playerDecoration, data.playerDecorationAnimated, data.playerCustomColor);
+
+        // Append ?lang= to streamUrl/publicStreamUrl if a non-default language
+        // is selected. This is done here (not in handleTrackChange) so every
+        // fetch — including prefetches — gets the right variant.
+        if (selectedLang && selectedLang !== 'default' && data.streamUrl) {
+          const sep = data.streamUrl.includes('?') ? '&' : '?';
+          data.streamUrl = data.streamUrl + sep + 'lang=' + encodeURIComponent(selectedLang);
+          if (data.publicStreamUrl) {
+            const sep2 = data.publicStreamUrl.includes('?') ? '&' : '?';
+            data.publicStreamUrl = data.publicStreamUrl + sep2 + 'lang=' + encodeURIComponent(selectedLang);
+          }
+        }
 
         // Track changed?
         if (data.sequenceName !== currentSequence) {

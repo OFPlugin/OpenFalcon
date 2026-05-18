@@ -789,7 +789,7 @@
      * ============================================================ */
     main {
       padding: 1.5rem 1.25rem 3rem;
-      max-width: 1280px;
+      max-width: 1600px;
       margin: 0 auto;
     }
     .tab-pane { display: none; }
@@ -1825,7 +1825,7 @@
           <rect class="lp" x="8"   y="-3"  width="5" height="5" rx="1"/>
         </svg>
         <span class="app-brand-text">ShowPilot</span>
-        <span class="app-version">v0.33.161</span>
+        <span class="app-version">v0.33.172</span>
       </span>
       <span id="modePill" class="mode-pill off">OFF</span>
       <span class="header-spacer"></span>
@@ -1976,12 +1976,12 @@
               <div id="qrViewerUrl" class="muted" style="font-size: 0.8rem; word-break: break-all; margin-bottom: 0.75rem;"></div>
               <div class="row" style="gap: 0.5rem; margin: 0;">
                 <button class="secondary" onclick="copyViewerUrl()" id="qrCopyBtn">📋 Copy URL</button>
-                <button class="secondary" onclick="downloadQr()">⬇ Download PNG</button>
+                <button class="secondary" onclick="downloadQr()">⬇ Download SVG</button>
               </div>
             </div>
-            <!-- QR image generated server-side; white bg so it scans correctly in dark theme -->
-            <img id="qrImg" src="" alt="Viewer QR code"
-                 style="border-radius: 6px; background: #fff; padding: 10px; flex-shrink: 0; width: 180px; height: 180px;" />
+            <!-- QR code rendered as SVG so it scales perfectly at any size -->
+            <object id="qrImg" data="" type="image/svg+xml" aria-label="Viewer QR code"
+                 style="border-radius: 6px; background: #fff; padding: 10px; flex-shrink: 0; width: 180px; height: 180px; display: block;"></object>
           </div>
         </div>
         <!-- Prompt shown when public_base_url isn't set yet -->
@@ -2024,7 +2024,7 @@
           </div>
 
           <div style="overflow-x: auto;">
-            <table>
+            <table style="min-width: 1200px;">
               <thead>
                 <tr>
                   <th style="width: 30px;">
@@ -2040,7 +2040,7 @@
                   <th style="width: 70px;">Jukebox</th>
                   <th style="width: 60px;">PSA</th>
                   <th style="width: 90px;" title="After this sequence plays, hide it from request UI and purge other queued copies for this many minutes. 0 = no cooldown.">Cooldown<br><span style="font-weight: normal; font-size: 0.75rem; color: var(--text-muted);">(min)</span></th>
-                  <th style="width: 200px;"></th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody id="sequencesBody"></tbody>
@@ -3455,6 +3455,47 @@
        Auto-runs a search on open using the current display name as the
        initial query. User can edit + re-search. Clicking a result writes
        the title, artist, AND cover to the sequence atomically. -->
+  <!-- Language Variant Modal (v0.33.162+) -->
+  <div id="langVariantModal" style="display:none; position:fixed; inset:0; z-index:9000;
+       background:rgba(0,0,0,0.65); align-items:center; justify-content:center;">
+    <div style="background:var(--bg-elevated); border:1px solid var(--border);
+                border-radius:8px; padding:1.5rem; max-width:480px; width:calc(100% - 2rem);
+                max-height:90vh; overflow-y:auto; color:var(--text);">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+        <h3 id="langVariantModalTitle" style="margin:0; font-size:1rem; color:var(--text);">Language Variants</h3>
+        <button onclick="closeLanguageModal()" style="background:transparent; border:0;
+                color:var(--text-muted); cursor:pointer; font-size:1.2rem; line-height:1;
+                padding:4px;">✕</button>
+      </div>
+      <p style="font-size:0.83rem; color:var(--text-muted); margin:0 0 0.75rem;">
+        Upload alternate-language audio files for this sequence. Viewers with the player open
+        will see a language toggle when variants are available. Each file must be the
+        <strong>same duration</strong> as the default track for sync to work correctly.
+      </p>
+      <input type="hidden" id="langVariantSeqName" />
+      <div id="langVariantList" style="margin-bottom:1rem; min-height:2rem;"></div>
+      <hr style="border-color:var(--border); margin:0.75rem 0;" />
+      <div style="font-size:0.85rem; font-weight:600; margin-bottom:0.5rem; color:var(--text);">Upload new variant</div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end; margin-bottom:0.5rem;">
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <label style="font-size:0.78rem; color:var(--text-muted);">Language code</label>
+          <input id="langVariantCode" type="text" placeholder="es" maxlength="10"
+                 style="width:60px; padding:0.35rem 0.5rem; font-size:0.9rem;
+                        background:var(--bg-input); border:1px solid var(--border);
+                        border-radius:4px; color:var(--text);" />
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px; flex:1; min-width:180px;">
+          <label style="font-size:0.78rem; color:var(--text-muted);">Audio file (MP3, M4A, etc.)</label>
+          <input id="langVariantFile" type="file" accept="audio/*"
+                 style="font-size:0.82rem; color:var(--text);" />
+        </div>
+        <button onclick="uploadLanguageVariant()"
+                style="padding:0.4rem 0.9rem; font-size:0.85rem; white-space:nowrap;">Upload</button>
+      </div>
+      <div id="langVariantStatus" style="font-size:0.82rem; min-height:1.2rem;"></div>
+    </div>
+  </div>
+
   <div id="trackSearchModal" class="of-modal hidden">
     <div class="of-modal-card" style="max-width: 720px; width: calc(100% - 2rem);">
       <h3 style="margin-top: 0;">Search for track</h3>
@@ -4075,6 +4116,141 @@
         refreshAudioCacheStats();
       } catch (e) {
         await showAlert('Clear error: ' + e.message);
+      }
+    }
+
+    // ============================================================
+    // Language variant management (v0.33.162+)
+    // ============================================================
+    // Admin can upload alternate-language audio files for any sequence
+    // that has a primary track in the cache. Uploaded via raw body POST
+    // (same pattern as the plugin upload endpoint).
+
+    // Show the language variant modal for a sequence.
+    async function openLanguageModal(sequenceName, displayName) {
+      const modal = document.getElementById('langVariantModal');
+      const modalTitle = document.getElementById('langVariantModalTitle');
+      const langList = document.getElementById('langVariantList');
+      const langSeqInput = document.getElementById('langVariantSeqName');
+
+      if (!modal) return;
+      modalTitle.textContent = 'Language Variants — ' + (displayName || sequenceName);
+      langSeqInput.value = sequenceName;
+      langList.innerHTML = '<span class="muted">Loading…</span>';
+      modal.style.display = 'flex';
+
+      await refreshLanguageVariantList(sequenceName);
+    }
+
+    function closeLanguageModal() {
+      const modal = document.getElementById('langVariantModal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    async function refreshLanguageVariantList(sequenceName) {
+      const langList = document.getElementById('langVariantList');
+      try {
+        const res = await fetch('/api/admin/audio-cache/languages/' + encodeURIComponent(sequenceName), { credentials: 'include' });
+        const data = await res.json();
+        const langs = (data.languages || []).filter(l => l !== 'default');
+        langList.innerHTML = '';
+        if (langs.length === 0) {
+          const empty = document.createElement('span');
+          empty.className = 'muted';
+          empty.style.fontSize = '0.85rem';
+          empty.textContent = 'No language variants uploaded yet.';
+          langList.appendChild(empty);
+        } else {
+          langs.forEach(lang => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex; align-items:center; gap:8px; padding:4px 0; border-bottom:1px solid var(--border);';
+            const label = document.createElement('span');
+            label.style.cssText = 'font-size:0.85rem; font-weight:600; text-transform:uppercase; min-width:32px;';
+            label.textContent = lang;
+            const btn = document.createElement('button');
+            btn.className = 'danger';
+            btn.style.cssText = 'padding:2px 8px; font-size:0.8rem;';
+            btn.textContent = 'Remove';
+            btn.addEventListener('click', () => deleteLanguageVariant(sequenceName, lang));
+            row.appendChild(label);
+            row.appendChild(btn);
+            langList.appendChild(row);
+          });
+        }
+      } catch (e) {
+        langList.innerHTML = '<span class="muted">Error: ' + escapeHtml(e.message) + '</span>';
+      }
+    }
+
+    async function uploadLanguageVariant() {
+      const seqName = document.getElementById('langVariantSeqName').value;
+      const langCode = (document.getElementById('langVariantCode').value || '').toLowerCase().trim();
+      const fileInput = document.getElementById('langVariantFile');
+      const statusEl = document.getElementById('langVariantStatus');
+
+      if (!langCode || !/^[a-z]{2,10}$/.test(langCode)) {
+        statusEl.textContent = 'Language code must be 2-10 lowercase letters (e.g. es, fr, de)';
+        statusEl.style.color = 'var(--status-danger)';
+        return;
+      }
+      if (!fileInput.files || !fileInput.files[0]) {
+        statusEl.textContent = 'Select an audio file first.';
+        statusEl.style.color = 'var(--status-danger)';
+        return;
+      }
+
+      statusEl.textContent = 'Computing hash…';
+      statusEl.style.color = '';
+
+      const file = fileInput.files[0];
+      const buf = await file.arrayBuffer();
+      // SHA-256 in browser
+      const hashBuf = await crypto.subtle.digest('SHA-256', buf);
+      const hash = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2,'0')).join('');
+
+      statusEl.textContent = 'Uploading…';
+      try {
+        const res = await fetch(
+          '/api/admin/audio-cache/languages/' + encodeURIComponent(seqName) +
+          '?lang=' + encodeURIComponent(langCode) +
+          '&hash=' + encodeURIComponent(hash) +
+          '&mimeType=' + encodeURIComponent(file.type || 'audio/mpeg'),
+          {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': file.type || 'audio/mpeg' },
+            body: buf,
+          }
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          statusEl.textContent = 'Upload failed: ' + (data.error || res.status);
+          statusEl.style.color = 'var(--status-danger)';
+          return;
+        }
+        statusEl.textContent = 'Uploaded ' + langCode.toUpperCase() + ' variant (' + formatBytes(data.sizeBytes || 0) + ')';
+        statusEl.style.color = 'var(--status-ok, green)';
+        fileInput.value = '';
+        document.getElementById('langVariantCode').value = '';
+        await refreshLanguageVariantList(seqName);
+      } catch (e) {
+        statusEl.textContent = 'Upload error: ' + e.message;
+        statusEl.style.color = 'var(--status-danger)';
+      }
+    }
+
+    async function deleteLanguageVariant(sequenceName, lang) {
+      const ok = await showConfirm('Remove ' + lang.toUpperCase() + ' variant?', 'Viewers will hear the default track for this language.');
+      if (!ok) return;
+      try {
+        const res = await fetch(
+          '/api/admin/audio-cache/languages/' + encodeURIComponent(sequenceName) + '/' + encodeURIComponent(lang),
+          { method: 'DELETE', credentials: 'include' }
+        );
+        if (!res.ok) { await showAlert('Delete failed (' + res.status + ')'); return; }
+        await refreshLanguageVariantList(sequenceName);
+      } catch (e) {
+        await showAlert('Delete error: ' + e.message);
       }
     }
 
@@ -5026,7 +5202,7 @@
       const src = '/api/admin/qr-code?cb=' + encodeURIComponent(url);
       if (img.dataset.url !== url) {
         img.dataset.url = url;
-        img.src = src;
+        img.data = src;  // <object> uses .data not .src
       }
     }
 
@@ -5045,13 +5221,12 @@
 
     function downloadQr() {
       if (!_qrCurrentUrl) return;
-      // Re-fetch as a blob so the download works cross-origin-cleanly
       fetch('/api/admin/qr-code?cb=' + encodeURIComponent(_qrCurrentUrl))
         .then(r => r.blob())
         .then(blob => {
           const a = document.createElement('a');
           a.href = URL.createObjectURL(blob);
-          a.download = 'viewer-qr.png';
+          a.download = 'viewer-qr.svg';
           a.click();
           setTimeout(() => URL.revokeObjectURL(a.href), 5000);
         })
@@ -6081,6 +6256,8 @@
       const tr = document.createElement('tr');
       tr.draggable = true;
       tr.dataset.id = seq.id;
+      tr.dataset.seqName = seq.name || '';
+      tr.dataset.seqDisplay = seq.display_name || seq.name || '';
 
       const art = seq.image_url
         ? `<img class="art-thumb" src="${escapeAttr(seq.image_url)}" onclick="promptImageUrl(${seq.id}, ${JSON.stringify(seq.image_url || '').replace(/"/g,'&quot;')})" title="Click to change artwork" />`
@@ -6106,9 +6283,18 @@
         <td style="white-space: nowrap;">
           <button class="secondary" onclick="toggleSeqPreview(${seq.id})" title="Preview the audio for this sequence" style="margin-right: 0.4rem;">▶</button>
           <button class="secondary" onclick="openTrackSearchModal(${seq.id})" title="Search iTunes / MusicBrainz for the right title, artist, and cover" style="margin-right: 0.4rem;">🔍 Search</button>
+          ${seq.media_name ? '<button class="secondary sp-lang-btn" style="margin-right: 0.4rem;" title="Manage alternate-language audio variants">🌐 Languages</button>' : ''}
           <button class="danger" onclick="delSeq(${seq.id})">Delete</button>
         </td>
       `;
+
+      // Language variants button — wired here to avoid inline onclick quoting issues
+      const langBtn = tr.querySelector('.sp-lang-btn');
+      if (langBtn) {
+        langBtn.addEventListener('click', () => {
+          openLanguageModal(tr.dataset.seqName, tr.dataset.seqDisplay);
+        });
+      }
 
       // Drag handlers
       tr.addEventListener('dragstart', onDragStart);

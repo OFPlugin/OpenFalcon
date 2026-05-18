@@ -374,6 +374,12 @@ If `fppPos` and `audioPos` differ significantly but `drift` shows ~0ms, that's e
 | 0.33.155 | Race mode — tap-to-win competitive viewer mode. Viewers tap their chosen sequence as fast as possible; the sequence with the most taps at round end (or first to a target count) wins and plays next. New DB columns: `race_duration_seconds`, `race_end_on_sequence_end`, `race_target_taps`, `race_interrupt_winner`, `race_active`, `race_started_at`, `race_ends_at`, `race_winner`. New `race_taps` table. Admin UI: Race settings card, race progress bar visible during active race, winner animation. FPP plugin handoff via `raceWinner` field on `/api/plugin/state`. |
 | 0.33.156 | Race mode polish and FPP plugin handoff refinements. `viewer_control_mode = 'RACE'` recognized in `getNextUp()` and plugin state handler. |
 | 0.33.157 | Race mode FPP scheduler command. `POST /api/plugin/viewer-mode` now accepts `RACE` as a valid mode (alongside VOTING, JUKEBOX, OFF, ON), allowing FPP scheduler events to trigger race mode at specific playlist positions. Race mode pill added to admin header (amber/gold background). Plugin v0.13.64 ships the companion `set_mode_race.php` command. |
+| 0.33.162 | Multi-language audio variants. `audio_cache_files` gains a `language` column. Admin can upload alternate-language audio files per sequence via a new 🌐 Languages modal on the Sequences tab. Three new endpoints: `GET/POST/DELETE /api/admin/audio-cache/languages/:sequence`. `/api/audio-stream/:sequence` accepts `?lang=XX` and falls back to `default` if variant is missing. `/api/now-playing-audio` response includes `languages` array. Language picker row appears in the player bar when a sequence has 2+ language variants; choice persists to localStorage as `sp_audio_lang`. rf-compat cache buster bumped to v=73. |
+| 0.33.163–0.33.168 | Bug fixes for language feature: fix nested-backtick onclick in sequence row (use addEventListener + data attrs); widen actions column; fix modal CSS vars for light theme; fix Remove button using createElement instead of innerHTML; move updateLanguagePicker before early-return so it always runs; remove audioCtx gate. |
+| 0.33.169 | Bump rf-compat cache buster to v=73 — all language picker changes were invisible to browsers still serving v=72. |
+| 0.33.170 | Fix storeLanguageFile: key upsert on (media_name, language) not hash, preventing same-file upload from overwriting the default row's language tag. |
+| 0.33.171 | QR code switched from PNG to SVG. `GET /api/admin/qr-code` now returns `image/svg+xml` with fixed width/height stripped so it scales freely via CSS. Admin displays via `<object>` tag; Download button saves `.svg`. Prints and displays crisply at any size. |
+| 0.33.172 | Fix audio_cache_files schema: `hash TEXT PRIMARY KEY` prevented storing multiple language variants (SQLite only allows one row per hash). Migration rebuilds the table with `id INTEGER PRIMARY KEY AUTOINCREMENT` and `UNIQUE(media_name, language)` — one row per file+language combination, hash is a plain column. All upserts in `storeUploadedFile`, `storeLanguageFile`, `linkMediaNameToHash` updated to use `ON CONFLICT(media_name, language)`. |
 
 **Plugin version history (this session):**
 | Version | Change |
@@ -387,9 +393,9 @@ If `fppPos` and `audioPos` differ significantly but `drift` shows ~0ms, that's e
 | 0.13.64 | `set_mode_race.php` scheduler command. Calls `POST /api/plugin/viewer-mode` with `{ mode: "RACE" }` so FPP scheduler events can activate race mode at a specific playlist position. |
 
 **Current versions (as of May 2026):**
-- ShowPilot: v0.33.157
+- ShowPilot: v0.33.172
 - FPP Plugin / Audio Daemon: v0.13.64
-- rf-compat.js cache buster: v=70
+- rf-compat.js cache buster: v=73
 
 ---
 
@@ -408,6 +414,8 @@ If `fppPos` and `audioPos` differ significantly but `drift` shows ~0ms, that's e
 **No playbackRate for sync (v0.33.134):** playbackRate correction was tried and abandoned. It oscillates because the drift measurement has lag, and ±0.5% causes audible pitch changes on some devices. Crossfade is the correct correction mechanism — inaudible 50ms fade between sources at the correct position.
 
 **Device-clock-free drift (v0.33.134):** OS clocks on different devices (phone vs PC) can differ by 100-300ms even on the same LAN. Using `clockOffset`-based `fppPositionNow` as the drift reference caused each device to correct to a different position. The fix: measure drift as `htmlAudio.currentTime - (snapAnchorPosSec + audioCtxElapsed)` — purely audio-clock-relative, device-clock-independent.
+
+**Multi-language audio variants (v0.33.162+):** `audio_cache_files` stores one row per `(media_name, language)` pair. `language = 'default'` is the primary track uploaded by the FPP plugin. Variants (e.g. `es`, `fr`) are uploaded manually via the admin Languages modal and served via `?lang=XX` on `/api/audio-stream`. The `audio_cache_files` table was rebuilt in v0.33.172 — original schema had `hash TEXT PRIMARY KEY` which prevented multiple rows per hash. New schema: `id INTEGER PRIMARY KEY AUTOINCREMENT`, `UNIQUE(media_name, language)`. All upserts key on `(media_name, language)`. The viewer-side language picker lives inside the player bar and only shows when `languages.length >= 2` in the `/api/now-playing-audio` response. Language choice persists to localStorage as `sp_audio_lang`. Files must be the same duration as the default track for sync to work correctly — the sync engine treats a language switch as a file swap and applies the same syncPoint snap logic.
 
 **Automatic speaker calibration (v0.33.135):** Do not add a manual `audioSyncOffsetMs` setting UI or suggest users tune it manually. The 5-sample fast calibration handles the speaker offset automatically every song. The `audioSyncOffsetMs` config value still exists for edge cases but should not need to be touched in normal operation.
 
