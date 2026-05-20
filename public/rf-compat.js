@@ -873,7 +873,7 @@
     const taps   = data.tapCount != null ? '<div class="race-winner-taps">\uD83C\uDFC6 ' + data.tapCount + ' taps</div>' : '';
     overlay.innerHTML =
       '<div class="race-winner-flag">\uD83C\uDFC1</div>' +
-      '<div class="race-winner-label">Winner!</div>' +
+      '<div class="race-winner-label">' + _pt('Winner!') + '</div>' +
       '<div class="race-winner-song">' + name + '</div>' +
       artist + taps +
       '<div style="color:rgba(255,255,255,0.5);font-size:0.8em">Playing next \u2013 tap to dismiss</div>';
@@ -2143,6 +2143,127 @@
   }
   window._ofShowGateModal = showGateModal;
 
+  // ---- Player bar translation table ----
+  // Translates the ~15 hardcoded strings in the player bar HTML and status
+  // messages into the viewer's browser language. Client-side only — these
+  // strings are injected by JS after page load so the server translator
+  // never sees them. Falls back to English for any missing key or language.
+  const _PLAYER_STRINGS = {
+    es: {
+      'Listen on phone': 'Escuchar en el teléfono',
+      'Preparing…': 'Preparando…',
+      'Play/pause': 'Reproducir/pausar',
+      'Mute': 'Silenciar',
+      'Hide player (audio keeps playing)': 'Ocultar reproductor (el audio continúa)',
+      'Hide (audio keeps playing)': 'Ocultar (el audio continúa)',
+      'Stop and close': 'Detener y cerrar',
+      'Stop & close': 'Detener y cerrar',
+      'Audio playing — tap to expand': 'Audio en reproducción — toca para expandir',
+      'No audio for this sequence': 'Sin audio para esta secuencia',
+      'Show is not playing': 'El espectáculo no está en marcha',
+      'Idle': 'Inactivo',
+      'No audio source available': 'No hay fuente de audio disponible',
+      "Show isn't playing right now": 'El espectáculo no está en marcha ahora',
+      'Winner!': '¡Ganador!',
+    },
+    fr: {
+      'Listen on phone': 'Écouter sur le téléphone',
+      'Preparing…': 'Préparation…',
+      'Play/pause': 'Lecture/pause',
+      'Mute': 'Couper le son',
+      'Hide player (audio keeps playing)': 'Masquer le lecteur (audio continue)',
+      'Hide (audio keeps playing)': 'Masquer (audio continue)',
+      'Stop and close': 'Arrêter et fermer',
+      'Stop & close': 'Arrêter et fermer',
+      'Audio playing — tap to expand': 'Audio en lecture — appuyez pour agrandir',
+      'No audio for this sequence': 'Pas d’audio pour cette séquence',
+      'Show is not playing': 'Le spectacle n’est pas en cours',
+      'Idle': 'Inactif',
+      'No audio source available': 'Aucune source audio disponible',
+      "Show isn't playing right now": 'Le spectacle n’est pas en cours maintenant',
+      'Winner!': 'Gagnant !',
+    },
+    de: {
+      'Listen on phone': 'Auf dem Telefon anhören',
+      'Preparing…': 'Vorbereitung…',
+      'Play/pause': 'Abspielen/Pause',
+      'Mute': 'Stummschalten',
+      'Hide player (audio keeps playing)': 'Player ausblenden (Audio läuft weiter)',
+      'Hide (audio keeps playing)': 'Ausblenden (Audio läuft weiter)',
+      'Stop and close': 'Stoppen und schließen',
+      'Stop & close': 'Stoppen und schließen',
+      'Audio playing — tap to expand': 'Audio läuft — tippe zum Erweitern',
+      'No audio for this sequence': 'Kein Audio für diese Sequenz',
+      'Show is not playing': 'Die Show läuft nicht',
+      'Idle': 'Inaktiv',
+      'No audio source available': 'Keine Audioquelle verfügbar',
+      "Show isn't playing right now": 'Die Show läuft gerade nicht',
+      'Winner!': 'Gewinner!',
+    },
+    pt: {
+      'Listen on phone': 'Ouvir no telefone',
+      'Preparing…': 'Preparando…',
+      'Play/pause': 'Reproduzir/pausar',
+      'Mute': 'Silenciar',
+      'Hide player (audio keeps playing)': 'Ocultar player (áudio continua)',
+      'Hide (audio keeps playing)': 'Ocultar (áudio continua)',
+      'Stop and close': 'Parar e fechar',
+      'Stop & close': 'Parar e fechar',
+      'Audio playing — tap to expand': 'Áudio tocando — toque para expandir',
+      'No audio for this sequence': 'Sem áudio para esta sequência',
+      'Show is not playing': 'O show não está tocando',
+      'Idle': 'Inativo',
+      'No audio source available': 'Nenhuma fonte de áudio disponível',
+      "Show isn't playing right now": 'O show não está tocando agora',
+      'Winner!': 'Vencedor!',
+    },
+    it: {
+      'Listen on phone': 'Ascolta sul telefono',
+      'Preparing…': 'Preparazione…',
+      'Play/pause': 'Riproduci/pausa',
+      'Mute': 'Silenzia',
+      'Hide player (audio keeps playing)': 'Nascondi player (audio continua)',
+      'Hide (audio keeps playing)': 'Nascondi (audio continua)',
+      'Stop and close': 'Ferma e chiudi',
+      'Stop & close': 'Ferma e chiudi',
+      'Audio playing — tap to expand': 'Audio in riproduzione — tocca per espandere',
+      'No audio for this sequence': 'Nessun audio per questa sequenza',
+      'Show is not playing': 'Lo show non è in corso',
+      'Idle': 'Inattivo',
+      'No audio source available': 'Nessuna sorgente audio disponibile',
+      "Show isn't playing right now": 'Lo show non è in corso adesso',
+      'Winner!': 'Vincitore!',
+    },
+    pl: {
+      'Listen on phone': 'Słuchaj na telefonie',
+      'Preparing…': 'Przygotowanie…',
+      'Play/pause': 'Odtwórz/pauza',
+      'Mute': 'Wycisz',
+      'Hide player (audio keeps playing)': 'Ukryj odtwarzacz (audio gra dalej)',
+      'Hide (audio keeps playing)': 'Ukryj (audio gra dalej)',
+      'Stop and close': 'Zatrzymaj i zamknij',
+      'Stop & close': 'Zatrzymaj i zamknij',
+      'Audio playing — tap to expand': 'Audio odtwarzane — dotknij, aby rozwinąć',
+      'No audio for this sequence': 'Brak dźwięku dla tej sekwencji',
+      'Show is not playing': 'Pokaz nie jest odtwarzany',
+      'Idle': 'Bezczynny',
+      'No audio source available': 'Brak dostępnego źródła dźwięku',
+      "Show isn't playing right now": 'Pokóz nie jest teraz odtwarzany',
+      'Winner!': 'Zwycięzca!',
+    },
+  };
+
+  // Translate a player bar string using the viewer's browser language.
+  // Returns the original string if no translation is found.
+  function _pt(str) {
+    // navigator.languages[0] is the first preference (what Accept-Language sends).
+    // navigator.language is the browser UI language, which may differ.
+    const preferred = (navigator.languages && navigator.languages[0]) || navigator.language || '';
+    const lang = preferred.split('-')[0].toLowerCase();
+    const table = _PLAYER_STRINGS[lang];
+    return (table && table[str]) || str;
+  }
+
   (function initListenOnPhone() {
     // ---- Floating launcher button ----
     //
@@ -2196,8 +2317,8 @@
 
     const btn = document.createElement('button');
     btn.id = 'of-listen-btn';
-    btn.setAttribute('aria-label', 'Listen on phone');
-    btn.title = 'Listen on phone';
+    btn.setAttribute('aria-label', _pt('Listen on phone'));
+    btn.title = _pt('Listen on phone');
     btn.innerHTML = iconHtml;
 
     // Chrome ON — original red round button with image/SVG inside.
@@ -2406,7 +2527,7 @@
                  display: inline-block; white-space: nowrap;"></div>
           </div>
           <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px; font-size: 10px; color: rgba(255,255,255,0.5);">
-            <span id="of-listen-status">Preparing…</span>
+            <span id="of-listen-status"></span>
             <span id="of-listen-drift"></span>
           </div>
         </div>
@@ -2461,7 +2582,7 @@
     // ---- Minimized "still playing" pill ----
     const minimizedPill = document.createElement('button');
     minimizedPill.id = 'of-listen-pill';
-    minimizedPill.setAttribute('aria-label', 'Audio playing — tap to expand');
+    minimizedPill.setAttribute('aria-label', _pt('Audio playing — tap to expand'));
     minimizedPill.style.cssText = `
       position: fixed; bottom: 16px; right: 16px; z-index: 9998;
       background: rgba(220,38,38,0.95); color: white;
@@ -2499,11 +2620,14 @@
     const artistWrap = panel.querySelector('#of-listen-artist-wrap');
     const coverEl = panel.querySelector('#of-listen-cover');
     const statusEl = panel.querySelector('#of-listen-status');
+    statusEl.textContent = _pt('Preparing…');
     const driftEl = panel.querySelector('#of-listen-drift');
     const playBtn = panel.querySelector('#of-listen-playpause');
     const muteBtn = panel.querySelector('#of-listen-mute');
     const minBtn = panel.querySelector('#of-listen-min');
+    minBtn.title = _pt('Hide (audio keeps playing)');
     const closeBtn = panel.querySelector('#of-listen-close');
+    closeBtn.title = _pt('Stop & close');
     const pillText = minimizedPill.querySelector('#of-listen-pill-text');
     const langRow = panel.querySelector('#of-lang-row');
     const langBtns = panel.querySelector('#of-lang-btns');
@@ -2600,7 +2724,7 @@
       padding: 4px 8px;
       display: none;
     `;
-    notPlayingMsg.textContent = "Show isn't playing right now";
+    notPlayingMsg.textContent = _pt("Show isn't playing right now");
     // Insert before the close button so the close stays at the right edge.
     closeBtn.parentElement.insertBefore(notPlayingMsg, closeBtn);
 
@@ -3504,12 +3628,12 @@
 
         if (!data.playing || !data.hasAudio) {
           if (currentSource) stopAudio();
-          titleEl.textContent = data.playing ? 'No audio for this sequence' : 'Show is not playing';
+          titleEl.textContent = data.playing ? _pt('No audio for this sequence') : _pt('Show is not playing');
           artistEl.textContent = '';
           setupMarquee(titleEl, titleWrap);
           setupMarquee(artistEl, artistWrap);
           statusEl.textContent = '';
-          pillText.textContent = 'Idle';
+          pillText.textContent = _pt('Idle');
           return;
         }
 
@@ -3688,7 +3812,7 @@
           : data.publicStreamUrl;
 
         if (!chosenUrl) {
-          statusEl.textContent = 'No audio source available';
+          statusEl.textContent = _pt('No audio source available');
           return;
         }
 

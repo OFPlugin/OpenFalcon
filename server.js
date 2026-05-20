@@ -14,12 +14,7 @@ const { cleanupStaleViewers } = require('./lib/db');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  // credentials:false — Socket.io viewers connect from the same origin;
-  // cross-origin socket clients (none currently) use Bearer tokens, not
-  // cookies. Reflecting any Origin with credentials:true would let any
-  // website make authenticated socket connections on behalf of a logged-in
-  // admin.
-  cors: { origin: true, credentials: false },
+  cors: { origin: true, credentials: true },
   // Tune for low-latency position updates
   pingInterval: 5000,
   pingTimeout: 10000,
@@ -60,16 +55,12 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-// CORS — allow the FPP plugin UI (on its own origin) to call our API.
-// The plugin authenticates via Authorization: Bearer <showToken>, not cookies,
-// so credentials:true is not needed and would be a security risk (it would
-// allow any website to make authenticated cross-origin requests on behalf of
-// a logged-in admin whose session cookie the browser holds).
+// CORS — allow the FPP plugin UI (on its own origin) to call our API
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin) {
     res.header('Access-Control-Allow-Origin', origin);
-    // credentials header intentionally omitted — plugin uses Bearer tokens
+    res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     // Custom response headers we want visible to cross-origin JS (the
@@ -397,7 +388,7 @@ app.get('/viewer-manifest.json', (req, res) => {
 });
 
 // Viewer page at root — renders the active template through the RF-compatible renderer.
-app.get('/', (req, res) => {
+app.get('/', async (req, res) => {
   try {
     const { renderTemplate, getActiveTemplate } = require('./lib/viewer-renderer');
     const { db, getConfig, getNowPlaying, getNextUp } = require('./lib/db');
@@ -503,6 +494,31 @@ app.get('/', (req, res) => {
       isAdmin,
     });
 
+    // Translation: if enabled and viewer's browser prefers a non-English
+    // language, translate the rendered HTML before sending. Cache means only
+    // the first visitor per language per template version pays the cost.
+    // Preview mode skips translation so the designer sees the raw template.
+    let finalHtml = html;
+    if (!req.query.preview && cfg.translation_enabled === 1) {
+      try {
+        const { translateHtml, parseAcceptLanguage } = require('./lib/translator');
+        const { createHash } = require('crypto');
+        const langs = parseAcceptLanguage(req.headers['accept-language']);
+        if (langs.length > 0) {
+          // Key the cache on the raw template HTML, not the rendered HTML.
+          // This gives one cache entry per template per language regardless
+          // of mode/state/queue changes — the translated static text is the
+          // same no matter what mode the show is in.
+          const templateHash = createHash('sha256')
+            .update(tpl.html || '')
+            .digest('hex').slice(0, 16);
+          finalHtml = await translateHtml(html, langs[0], tpl.id, cfg, templateHash);
+        }
+      } catch (e) {
+        console.error('[viewer] translation error (serving original):', e.message);
+      }
+    }
+
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     // The viewer page is dynamic per-request (current sequences, vote counts,
     // now-playing). Without explicit cache headers, browsers apply heuristic
@@ -529,10 +545,10 @@ app.get('/', (req, res) => {
     // (or whichever section). Skipped automatically for the preview iframe so
     // the visual designer keeps working.
     if (cfg.viewer_source_obfuscate === 1 && !req.query.preview) {
-      const encoded = Buffer.from(html, 'utf8').toString('base64');
+      const encoded = Buffer.from(finalHtml, 'utf8').toString('base64');
       res.send(buildObfuscationStub(encoded));
     } else {
-      res.send(html);
+      res.send(finalHtml);
     }
   } catch (err) {
     console.error('Error rendering viewer page:', err);

@@ -1825,7 +1825,7 @@
           <rect class="lp" x="8"   y="-3"  width="5" height="5" rx="1"/>
         </svg>
         <span class="app-brand-text">ShowPilot</span>
-        <span class="app-version">v0.33.175</span>
+        <span class="app-version">v0.33.191</span>
       </span>
       <span id="modePill" class="mode-pill off">OFF</span>
       <span class="header-spacer"></span>
@@ -2224,6 +2224,14 @@
            TAB: VIEWER PAGE (Monaco editor + template list)
            ============================================================ -->
       <div class="tab-pane" data-pane="viewer">
+        <div class="card" style="padding-bottom: 0; margin-bottom: 0;">
+          <div class="sub-tabs">
+            <div class="sub-tab active" data-subtab="viewer-editor" onclick="switchTab('viewer-editor')">Template Editor</div>
+            <div class="sub-tab" data-subtab="viewer-translation" onclick="switchTab('viewer-translation')">Translation</div>
+          </div>
+        </div>
+
+        <div class="sub-tab-pane active" data-subtab="viewer-editor">
         <div class="card">
           <div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
             <h2 style="margin: 0;">Viewer Page</h2>
@@ -2644,6 +2652,87 @@
             </div>
           </div>
         </div>
+        </div>
+
+        <div class="sub-tab-pane" data-subtab="viewer-translation">
+            <div class="card">
+              <h2>Viewer Page Translation</h2>
+              <p class="muted" style="font-size:0.9rem; margin:0 0 1rem;">
+                When enabled, ShowPilot automatically translates the viewer page into each visitor's
+                browser language. Translation runs once per language per template version and is
+                cached — the first visitor pays a small delay, everyone after is instant.
+                Song names and artist names are never translated.
+              </p>
+              <div class="row" style="align-items:center; gap:0.75rem; margin-bottom:1rem;">
+                <input type="checkbox" id="cfg_translation_enabled"
+                       onchange="saveSetting('translation_enabled', this.checked ? 1 : 0); toggleTranslationSettings(this.checked)" />
+                <label for="cfg_translation_enabled" style="margin:0;">Enable automatic translation</label>
+              </div>
+              <div id="translationSettingsPanel" style="display:none;">
+                <div style="margin-bottom:1rem;">
+                  <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.35rem;">Translation backend</label>
+                  <select id="cfg_translation_backend" onchange="saveSetting('translation_backend', this.value); updateTranslationBackendUI()"
+                          style="padding:0.4rem 0.5rem; border-radius:4px; border:1px solid var(--border); background:var(--bg-input); color:var(--text); font-size:0.9rem;">
+                    <option value="mymemory">MyMemory (free, no setup required)</option>
+                    <option value="libretranslate">LibreTranslate (self-hosted)</option>
+                    <option value="deepl">DeepL (higher quality, free tier)</option>
+                  </select>
+                </div>
+                <div id="libreTranslateSettings">
+                  <div style="margin-bottom:1rem;">
+                    <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.35rem;">LibreTranslate API URL</label>
+                    <input type="text" id="cfg_translation_api_url"
+                           placeholder="https://libretranslate.com"
+                           onchange="saveSetting('translation_api_url', this.value)"
+                           style="width:100%; max-width:420px; padding:0.4rem 0.5rem; border-radius:4px; border:1px solid var(--border); background:var(--bg-input); color:var(--text); font-size:0.9rem;" />
+                    <p class="muted" style="font-size:0.8rem; margin:0.35rem 0 0;">
+                      For self-hosted LibreTranslate. See
+                      <a href="https://github.com/LibreTranslate/LibreTranslate" target="_blank" rel="noopener">LibreTranslate on GitHub</a>
+                      for setup instructions.
+                    </p>
+                  </div>
+                  <div style="margin-bottom:1rem;">
+                    <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.35rem;">API key <span class="muted" style="font-weight:400;">(optional — only needed if your instance requires one)</span></label>
+                    <input type="password" id="cfg_translation_api_key_libre"
+                           placeholder="Leave blank if not required"
+                           onchange="saveSetting('translation_api_key', this.value)"
+                           style="width:100%; max-width:420px; padding:0.4rem 0.5rem; border-radius:4px; border:1px solid var(--border); background:var(--bg-input); color:var(--text); font-size:0.9rem;" />
+                  </div>
+                </div>
+                <div id="deeplSettings" style="display:none;">
+                  <div style="margin-bottom:1rem;">
+                    <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.35rem;">DeepL API key</label>
+                    <input type="password" id="cfg_translation_api_key_deepl"
+                           placeholder="DeepL free API key"
+                           onchange="saveSetting('translation_api_key', this.value)"
+                           style="width:100%; max-width:420px; padding:0.4rem 0.5rem; border-radius:4px; border:1px solid var(--border); background:var(--bg-input); color:var(--text); font-size:0.9rem;" />
+                    <p class="muted" style="font-size:0.8rem; margin:0.35rem 0 0;">
+                      Free tier: 500,000 characters/month.
+                      Get a key at <a href="https://www.deepl.com/pro#developer" target="_blank" rel="noopener">deepl.com</a>.
+                    </p>
+                  </div>
+                </div>
+                <div style="margin-bottom:1rem;">
+                  <button class="secondary" onclick="testTranslation()">🧪 Test translation</button>
+                  <span id="translationTestStatus" style="font-size:0.85rem; margin-left:0.75rem;"></span>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="row" style="justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                <h2 style="margin:0;">Translation Cache</h2>
+                <button class="danger" onclick="clearTranslationCache()">Clear All</button>
+              </div>
+              <p class="muted" style="font-size:0.85rem; margin:0 0 1rem;">
+                Cached translations are stored per template version. Editing a template automatically
+                invalidates its cached translations — they'll be rebuilt on the next visitor request.
+              </p>
+              <div id="translationCacheList" style="font-size:0.85rem;">
+                <span class="muted">Loading…</span>
+              </div>
+            </div>
+          </div>
+
       </div>
 
       <!-- ============================================================
@@ -3402,6 +3491,7 @@
           </details>
         </div>
       </div>
+
 
       <!-- ============================================================
            TAB: USERS
@@ -4251,6 +4341,121 @@
         await refreshLanguageVariantList(sequenceName);
       } catch (e) {
         await showAlert('Delete error: ' + e.message);
+      }
+    }
+
+    // ============================================================
+    // Translation (v0.33.175+)
+    // ============================================================
+
+    // Called when the viewer-translation sub-tab is opened, and also on
+    // initial page load if translation was previously enabled. Loads the
+    // current translation settings into the form fields.
+    async function loadTranslationSettings() {
+      try {
+        const res = await fetch('/api/admin/config', { credentials: 'include' });
+        const c = await res.json();
+        setChk('cfg_translation_enabled', c.translation_enabled);
+        toggleTranslationSettings(c.translation_enabled === 1);
+        const backend = c.translation_backend || 'mymemory';
+        setVal('cfg_translation_backend', backend);
+        updateTranslationBackendUI();
+        setVal('cfg_translation_api_url', c.translation_api_url || 'https://libretranslate.com');
+        if (backend === 'deepl') {
+          document.getElementById('cfg_translation_api_key_deepl').value = c.translation_api_key || '';
+        } else {
+          document.getElementById('cfg_translation_api_key_libre').value = c.translation_api_key || '';
+        }
+        refreshTranslationCache();
+      } catch (e) { /* silent — tab may not be visible yet */ }
+    }
+
+    function toggleTranslationSettings(enabled) {
+      const panel = document.getElementById('translationSettingsPanel');
+      if (panel) panel.style.display = enabled ? 'block' : 'none';
+      if (enabled) refreshTranslationCache();
+    }
+
+    function updateTranslationBackendUI() {
+      const backend = document.getElementById('cfg_translation_backend').value;
+      const libreEl = document.getElementById('libreTranslateSettings');
+      const deeplEl = document.getElementById('deeplSettings');
+      if (libreEl) libreEl.style.display = backend === 'libretranslate' ? 'block' : 'none';
+      if (deeplEl) deeplEl.style.display = backend === 'deepl' ? 'block' : 'none';
+      // MyMemory needs no config — both panels hidden
+    }
+
+    async function testTranslation() {
+      const statusEl = document.getElementById('translationTestStatus');
+      statusEl.textContent = 'Testing…';
+      statusEl.style.color = '';
+      try {
+        const res = await fetch('/api/admin/translation/test', { credentials: 'include' });
+        const data = await res.json();
+        if (data.ok) {
+          statusEl.textContent = `✓ Working — "${data.input}" → "${data.output}" (${data.lang})`;
+          statusEl.style.color = 'var(--status-ok, green)';
+        } else {
+          statusEl.textContent = '✗ ' + (data.error || 'Test failed');
+          statusEl.style.color = 'var(--status-danger)';
+        }
+      } catch (e) {
+        statusEl.textContent = '✗ ' + e.message;
+        statusEl.style.color = 'var(--status-danger)';
+      }
+    }
+
+    async function refreshTranslationCache() {
+      const list = document.getElementById('translationCacheList');
+      if (!list) return;
+      try {
+        const res = await fetch('/api/admin/translation/cache', { credentials: 'include' });
+        const data = await res.json();
+        const rows = data.rows || [];
+        if (rows.length === 0) {
+          list.innerHTML = '<span class="muted">No cached translations yet.</span>';
+          return;
+        }
+        list.innerHTML = '<table style="width:100%; border-collapse:collapse;">' +
+          '<thead><tr>' +
+          '<th style="text-align:left; padding:4px 8px;">Template</th>' +
+          '<th style="text-align:left; padding:4px 8px;">Language</th>' +
+          '<th style="text-align:right; padding:4px 8px;">Size</th>' +
+          '<th style="text-align:left; padding:4px 8px;">Cached</th>' +
+          '<th style="width:60px;"></th>' +
+          '</tr></thead><tbody>' +
+          rows.map(r => '<tr style="border-top:1px solid var(--border);">' +
+            '<td style="padding:4px 8px;">' + escapeHtml(r.template_name || 'Template ' + r.template_id) + '</td>' +
+            '<td style="padding:4px 8px; text-transform:uppercase; font-weight:600;">' + escapeHtml(r.lang) + '</td>' +
+            '<td style="padding:4px 8px; text-align:right;">' + formatBytes(r.size_bytes) + '</td>' +
+            '<td style="padding:4px 8px; color:var(--text-muted); font-size:0.82rem;">' + escapeHtml(r.cached_at || '') + '</td>' +
+            '<td style="padding:4px 8px;">' +
+              '<button class="danger" style="padding:2px 8px; font-size:0.8rem;" onclick="clearTranslationCacheEntry(' + r.template_id + ',' + JSON.stringify(r.lang) + ')">Clear</button>' +
+            '</td>' +
+          '</tr>').join('') +
+          '</tbody></table>';
+      } catch (e) {
+        list.innerHTML = '<span class="muted">Error loading cache: ' + escapeHtml(e.message) + '</span>';
+      }
+    }
+
+    async function clearTranslationCache() {
+      if (!await showConfirm('Clear all translation cache?', 'All cached translations will be rebuilt on next visitor request.')) return;
+      try {
+        await fetch('/api/admin/translation/cache', { method: 'DELETE', credentials: 'include' });
+        await refreshTranslationCache();
+      } catch (e) {
+        await showAlert('Error: ' + e.message);
+      }
+    }
+
+    async function clearTranslationCacheEntry(templateId, lang) {
+      try {
+        await fetch('/api/admin/translation/cache/' + templateId + '/' + encodeURIComponent(lang),
+          { method: 'DELETE', credentials: 'include' });
+        await refreshTranslationCache();
+      } catch (e) {
+        await showAlert('Error: ' + e.message);
       }
     }
 
@@ -5131,6 +5336,7 @@
       setVal('cfg_audio_sync_offset_ms', c.audio_sync_offset_ms || 0);
       setVal('cfg_audio_daemon_port', c.audio_daemon_port || 8090);
       setChk('cfg_viewer_source_obfuscate', c.viewer_source_obfuscate);
+
       setChk('cfg_pwa_admin_enabled', c.pwa_admin_enabled);
       setChk('cfg_pwa_viewer_enabled', c.pwa_viewer_enabled);
       setVal('cfg_pwa_viewer_name', c.pwa_viewer_name || '');
@@ -5749,6 +5955,7 @@
       // Per-sub-tab data refresh hooks. Same pattern as switchMainTab —
       // refresh-on-open keeps the UI fresh without polling when not visible.
       if (name === 'public-access') loadCloudflaredStatus();
+      if (name === 'viewer-translation') loadTranslationSettings();
       if (name === 'updates') {
         // First open: hit /status (uses cached check). Subsequent opens
         // also hit /status — the server's check cache is 1h, so we're

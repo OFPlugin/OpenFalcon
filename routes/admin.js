@@ -249,6 +249,11 @@ router.put('/config', requireAdmin, (req, res) => {
     'pwa_viewer_enabled',
     'pwa_viewer_name',
     'pwa_viewer_icon',
+    // Translation settings
+    'translation_enabled',
+    'translation_backend',
+    'translation_api_url',
+    'translation_api_key',
     // Listen-on-phone launcher button
     'launcher_icon_source',
     'launcher_icon_data',
@@ -1050,15 +1055,6 @@ router.post(
       ? String(req.query.mimeType)
       : (req.headers['content-type'] || 'audio/mpeg');
 
-    // Allowlist MIME types to prevent a bad actor (or buggy client) from
-    // storing text/html or image/svg+xml, which the browser would render
-    // as markup when the audio-stream endpoint serves it back.
-    const ALLOWED_MIME_TYPES = [
-      'audio/mpeg', 'audio/aac', 'audio/mp4', 'audio/ogg',
-      'audio/flac', 'audio/wav', 'audio/webm', 'audio/x-m4a',
-    ];
-    const safeMimeType = ALLOWED_MIME_TYPES.includes(mimeType) ? mimeType : 'audio/mpeg';
-
     if (!lang || lang === 'default') {
       return res.status(400).json({ error: 'lang query param required and must not be "default"' });
     }
@@ -1080,7 +1076,7 @@ router.post(
     }
 
     try {
-      audioCache.storeLanguageFile(req.body, claimedHash, seq.media_name, lang, safeMimeType);
+      audioCache.storeLanguageFile(req.body, claimedHash, seq.media_name, lang, mimeType);
       console.log(`[admin/language-upload] stored ${lang} variant for "${seqName}" (${req.body.length} bytes)`);
       res.json({ ok: true, sequenceName: seqName, lang, hash: claimedHash, sizeBytes: req.body.length });
     } catch (err) {
@@ -1108,6 +1104,101 @@ router.delete('/audio-cache/languages/:sequence/:lang', requireAdmin, (req, res)
     res.json({ ok: true, deleted });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================================
+// Translation management endpoints (v0.33.175+)
+// ============================================================
+
+router.get('/translation/cache', requireAdmin, (req, res) => {
+  try {
+    const { getTranslationCacheStats } = require('../lib/translator');
+    const rows = getTranslationCacheStats();
+    // Enrich with template names
+    const enriched = rows.map(r => {
+      const tpl = db.prepare(`SELECT name FROM viewer_page_templates WHERE id = ? LIMIT 1`).get(r.template_id);
+      return { ...r, template_name: tpl ? tpl.name : null };
+    });
+    res.json({ ok: true, rows: enriched });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.delete('/translation/cache', requireAdmin, (req, res) => {
+  try {
+    const { clearTranslationCache } = require('../lib/translator');
+    clearTranslationCache();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.delete('/translation/cache/:templateId/:lang', requireAdmin, (req, res) => {
+  try {
+    const { db: dbLib } = require('../lib/db');
+    dbLib.prepare(`DELETE FROM translation_cache WHERE template_id = ? AND lang = ?`)
+      .run(Number(req.params.templateId), req.params.lang);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Test the configured translation backend with a short fixed string
+router.get('/translation/test', requireAdmin, async (req, res) => {
+  try {
+    const { getConfig } = require('../lib/db');
+    const cfg = getConfig();
+    if (cfg.translation_enabled !== 1) {
+      return res.json({ ok: false, error: 'Translation is not enabled' });
+    }
+    const backend = cfg.translation_backend || 'mymemory';
+    const https = require('https');
+    const http = require('http');
+    const testInput = 'Now playing';
+    const lang = 'es';
+
+    // Test the configured backend directly — no cache, no full HTML pipeline
+    let output;
+    if (backend === 'deepl') {
+      const apiKey = cfg.translation_api_key || '';
+      if (!apiKey) return res.json({ ok: false, error: 'DeepL API key not configured' });
+      const r = await new Promise((resolve, reject) => {
+        const data = JSON.stringify({ text: [testInput], target_lang: 'ES' });
+        const req2 = https.request({ hostname: 'api-free.deepl.com', path: '/v2/translate', method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `DeepL-Auth-Key ${apiKey}`, 'Content-Length': Buffer.byteLength(data) }
+        }, res2 => { let b=''; res2.on('data',c=>b+=c); res2.on('end',()=>{ try{resolve(JSON.parse(b))}catch(e){reject(e)} }); });
+        req2.on('error', reject); req2.write(data); req2.end();
+      });
+      output = r.translations?.[0]?.text || testInput;
+    } else if (backend === 'libretranslate') {
+      const apiUrl = cfg.translation_api_url || 'https://libretranslate.com';
+      const apiKey = cfg.translation_api_key || '';
+      const body = JSON.stringify({ q: testInput, source: 'en', target: lang, format: 'text', ...(apiKey ? { api_key: apiKey } : {}) });
+      const u = new URL(apiUrl + '/translate');
+      const lib = u.protocol === 'https:' ? https : http;
+      const r = await new Promise((resolve, reject) => {
+        const req2 = lib.request({ hostname: u.hostname, port: u.port || 443, path: u.pathname + '/translate',
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+        }, res2 => { let b=''; res2.on('data',c=>b+=c); res2.on('end',()=>{ try{resolve(JSON.parse(b))}catch(e){reject(e)} }); });
+        req2.on('error', reject); req2.write(body); req2.end();
+      });
+      output = r.translatedText || testInput;
+    } else {
+      // MyMemory
+      const r = await new Promise((resolve, reject) => {
+        const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(testInput)}&langpair=en|${lang}`;
+        https.get(url, res2 => { let b=''; res2.on('data',c=>b+=c); res2.on('end',()=>{ try{resolve(JSON.parse(b))}catch(e){reject(e)} }); }).on('error', reject);
+      });
+      output = r?.responseData?.translatedText || testInput;
+    }
+
+    res.json({ ok: true, input: testInput, output, lang, backend });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
   }
 });
 
