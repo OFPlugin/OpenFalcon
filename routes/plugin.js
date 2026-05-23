@@ -372,6 +372,33 @@ router.get('/state', (req, res) => {
       rememberHandoff(next.sequence_name, 'request');
       const io = req.app.get('io');
       if (io) io.emit('queueUpdated');
+    } else {
+      // No fresh entry to hand off. In non-interrupt mode FPP polls many
+      // times between the handoff and when the current song actually ends;
+      // if we return nothing on those polls FPP drops the queued song and
+      // resumes its main playlist. Re-return the already-handed-off but
+      // not-yet-confirmed-played entry so FPP keeps it queued.
+      // Also refresh handed_off_at so cleanupStaleHandoffs doesn't expire
+      // it while a long song is still playing.
+      const pending = db.prepare(`
+        SELECT q.sequence_name, q.requested_at, s.sort_order
+        FROM jukebox_queue q
+        LEFT JOIN sequences s ON s.name = q.sequence_name COLLATE NOCASE
+        WHERE q.played = 0 AND q.handed_off_at IS NOT NULL
+        ORDER BY q.requested_at ASC LIMIT 1
+      `).get();
+      if (pending) {
+        db.prepare(
+          `UPDATE jukebox_queue SET handed_off_at = CURRENT_TIMESTAMP
+           WHERE sequence_name = ? AND played = 0 AND handed_off_at IS NOT NULL`
+        ).run(pending.sequence_name);
+        rememberHandoff(pending.sequence_name, 'request');
+        response.nextRequest = {
+          sequence: pending.sequence_name,
+          playlistIndex: pending.sort_order,
+          queuedAt: pending.requested_at,
+        };
+      }
     }
   } else if (cfg.viewer_control_mode === 'RACE') {
     // Race mode: plugin v0.13.58+ handles RACE natively via the raceWinner
@@ -544,6 +571,28 @@ router.post('/playing', (req, res) => {
     // detection + handoff source. Helps debug "round stuck" issues.
     const cfgForRound = getConfig();
     console.log(`[playing] seq="${name}" source=${source} mode=${cfgForRound.viewer_control_mode} isChange=${isSequenceChange}`);
+
+    // Belt-and-suspenders: also clear on a schedule song if queue is drained
+    // and the baseline doesn't match what started (catches cases where the
+    // /api/plugin/next call hasn't fired yet to update next_sequence_name).
+    if (
+      isSequenceChange &&
+      source === 'schedule' &&
+      cfgForRound.viewer_control_mode === 'JUKEBOX'
+    ) {
+      const queueEmpty = db.prepare(
+        `SELECT COUNT(*) AS n FROM jukebox_queue WHERE played = 0`
+      ).get().n === 0;
+      if (queueEmpty) {
+        const npBaseline = db.prepare(
+          `SELECT baseline_next_sequence_name FROM now_playing WHERE id = 1`
+        ).get();
+        if (npBaseline && npBaseline.baseline_next_sequence_name &&
+            npBaseline.baseline_next_sequence_name !== name) {
+          setBaselineNext(null);
+        }
+      }
+    }
 
     const isVoting = cfgForRound.viewer_control_mode === 'VOTING';
     if (isVoting && isSequenceChange && cfgForRound.reset_votes_after_round) {
@@ -773,11 +822,46 @@ router.post('/next', (req, res) => {
 
   setNextScheduled(name || null);
 
+  // Interrupt-mode detection: cfg.interrupt_schedule may not be set when the
+  // FPP plugin manages its own interrupt flag independently. Instead, detect
+  // interrupt mode by observing FPP's behavior: when a jukebox song is playing
+  // and FPP reports the last scheduled song as "next," FPP is in interrupt mode
+  // and that song is the return point after the queue drains. Update the
+  // baseline now so Tier 3 immediately shows the correct song.
+  //
+  // In non-interrupt mode FPP reports null (end of request playlist) or the
+  // main-playlist continuation (Song B), which won't match the last scheduled
+  // song (Song A), so the existing baseline is left untouched.
+  if (name) {
+    const npNow = db.prepare('SELECT sequence_name FROM now_playing WHERE id = 1').get();
+    const nowPlayingName = npNow && npNow.sequence_name;
+    if (nowPlayingName) {
+      const isJukeboxPlaying = db.prepare(`
+        SELECT COUNT(*) AS n FROM jukebox_queue
+        WHERE sequence_name = ? COLLATE NOCASE
+          AND (played = 1 OR handed_off_at IS NOT NULL)
+      `).get(nowPlayingName).n > 0;
+      if (isJukeboxPlaying) {
+        const lastScheduled = db.prepare(`
+          SELECT sequence_name FROM play_history
+          WHERE source = 'schedule'
+          ORDER BY played_at DESC LIMIT 1
+        `).get();
+        if (lastScheduled && lastScheduled.sequence_name === name) {
+          const npBaseline = db.prepare('SELECT baseline_next_sequence_name FROM now_playing WHERE id = 1').get();
+          if (!npBaseline || npBaseline.baseline_next_sequence_name !== name) {
+            setBaselineNext(name);
+          }
+        }
+      }
+    }
+  }
+
   const io = req.app.get('io');
   if (io) {
-    // While an interrupting song plays, FPP reports the next song in the
-    // voting/request playlist. Emit the baseline instead so socket-connected
-    // viewers see the main-playlist return point, consistent with /api/state.
+    // Emit the baseline if set (main-playlist return point), otherwise FPP's
+    // live report. The baseline update above runs first so interrupt mode
+    // immediately emits the correct return song.
     const npBaseline = db.prepare('SELECT baseline_next_sequence_name FROM now_playing WHERE id = 1').get();
     const emitName = (npBaseline && npBaseline.baseline_next_sequence_name) || name || null;
     io.emit('nextScheduled', { sequenceName: emitName });

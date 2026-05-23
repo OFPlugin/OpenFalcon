@@ -9,7 +9,7 @@ const crypto = require('crypto');
 const router = express.Router();
 const config = require('../lib/config-loader');
 const { db, getConfig, getNowPlaying, getActiveViewerCount, getSequenceByName, castTiebreakVote, getNextUp,
-        addRaceTap, getRaceTapCounts, resetRaceTaps, getRaceLeader } = require('../lib/db');
+        addRaceTap, getRaceTapCounts, resetRaceTaps, getRaceLeader, setBaselineNext } = require('../lib/db');
 const { bustCoverUrl } = require('../lib/cover-art');
 
 function ensureViewerToken(req, res) {
@@ -706,12 +706,41 @@ router.post('/jukebox/add', (req, res) => {
     }
   }
 
+  // Check emptiness BEFORE the insert so we know if this is the first song
+  // added to an otherwise-idle queue (the "clean queue" case).
+  const queueWasEmpty = db.prepare(
+    `SELECT COUNT(*) AS n FROM jukebox_queue WHERE played = 0`
+  ).get().n === 0;
+
   db.prepare(`
     INSERT INTO jukebox_queue (sequence_id, sequence_name, viewer_token)
     VALUES (?, ?, ?)
   `).run(seq.id, seq.name, token);
 
   db.prepare(`UPDATE config SET interactions_since_last_psa = interactions_since_last_psa + 1 WHERE id = 1`).run();
+
+  // Snapshot the main-playlist return point as the jukebox baseline so
+  // "Up Next" shows the correct song while the jukebox queue plays through.
+  const npNow = getNowPlaying();
+  if (cfg.interrupt_schedule) {
+    // Interrupt mode: FPP resumes the currently-playing song after the queue
+    // drains, so the currently-playing song IS the return point.
+    // Always overwrite (no queueWasEmpty guard) so a stale baseline from a
+    // prior non-interrupt session never silently shows the wrong song.
+    if (npNow.sequence_name) setBaselineNext(npNow.sequence_name);
+  } else if (queueWasEmpty) {
+    // Non-interrupt mode: jukebox songs play AFTER the current song finishes,
+    // so the return point is the next main-playlist song (Song B), not the
+    // currently-playing one (Song A, which will have already played).
+    // Only set once per session (when the queue was idle) — subsequent adds
+    // should not move the return point.
+    const npState = db.prepare(
+      'SELECT next_sequence_name FROM now_playing WHERE id = 1'
+    ).get();
+    if (npState && npState.next_sequence_name) {
+      setBaselineNext(npState.next_sequence_name);
+    }
+  }
 
   const io = req.app.get('io');
   if (io) {
