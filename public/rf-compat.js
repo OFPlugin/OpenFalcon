@@ -1304,6 +1304,7 @@
       socket.on('voteUpdate', () => refreshState());
       socket.on('queueUpdated', () => refreshState());
       socket.on('nowPlaying', () => refreshState());
+      socket.on('nextScheduled', () => refreshState());
       socket.on('voteReset', () => {
         hasVoted = false;
         hasTiebreakVoted = false;
