@@ -574,12 +574,14 @@
     }
 
     // --- NOW_PLAYING text ---
-    const nowEl = document.querySelector('.now-playing-text');
-    if (nowEl) {
+    const nowEls = document.querySelectorAll('.now-playing-text');
+    if (nowEls.length) {
       const nowDisplay = data.nowPlaying
         ? (data.sequences || []).find(s => s.name === data.nowPlaying)?.display_name || data.nowPlaying
         : '—';
-      if (nowEl.textContent !== nowDisplay) nowEl.textContent = nowDisplay;
+      nowEls.forEach(el => {
+        if (el.textContent !== nowDisplay) el.textContent = nowDisplay;
+      });
     }
 
     // --- NOW_PLAYING_IMAGE (v0.32.13+) ---
@@ -623,25 +625,24 @@
     }
 
     // --- Queue size & queue list ---
-    const queueSizeEl = document.querySelector('[data-showpilot-queue-size], [data-openfalcon-queue-size]');
-    if (queueSizeEl) queueSizeEl.textContent = String((data.queue || []).length);
+    const queueSizeEls = document.querySelectorAll('[data-showpilot-queue-size], [data-openfalcon-queue-size]');
+    queueSizeEls.forEach(el => { el.textContent = String((data.queue || []).length); });
 
-    const queueListEl = document.querySelector('[data-showpilot-queue-list], [data-openfalcon-queue-list]');
-    if (queueListEl) {
+    const queueListEls = document.querySelectorAll('[data-showpilot-queue-list], [data-openfalcon-queue-list]');
+    if (queueListEls.length) {
       const byName = Object.fromEntries((data.sequences || []).map(s => [s.name, s]));
-      if ((data.queue || []).length === 0) {
+      const queueHtml = (data.queue || []).length === 0
         // Match the server-side renderQueue empty-state shape (v0.32.13+).
-        queueListEl.innerHTML = '<div class="queue-empty">Queue is empty.</div>';
-      } else {
+        ? '<div class="queue-empty">Queue is empty.</div>'
         // Match the server-side renderQueue shape: each entry is its own
         // <div class="queue-item"> so RF Page Builder's `.queue-list > div`
         // selector matches.
-        queueListEl.innerHTML = data.queue.map(e => {
-          const seq = byName[e.sequence_name];
-          const name = seq ? seq.display_name : e.sequence_name;
-          return `<div class="queue-item" data-seq="${escapeAttr(e.sequence_name)}">${escapeHtml(name)}</div>`;
-        }).join('');
-      }
+        : data.queue.map(e => {
+            const seq = byName[e.sequence_name];
+            const name = seq ? seq.display_name : e.sequence_name;
+            return `<div class="queue-item" data-seq="${escapeAttr(e.sequence_name)}">${escapeHtml(name)}</div>`;
+          }).join('');
+      queueListEls.forEach(el => { el.innerHTML = queueHtml; });
     }
 
     // --- Sequence list live rebuild (v0.33.6+) ---
