@@ -773,11 +773,30 @@ router.post('/next', (req, res) => {
 
   setNextScheduled(name || null);
 
+  // In jukebox mode: when FPP announces a non-jukebox song as "next", it is
+  // the main-playlist return point — the interrupted song in immediate-interrupt
+  // mode (FPP resumes the song that was cut short), or the first main-playlist
+  // song following the last jukebox entry in non-interrupt mode. Update the
+  // baseline here so Up Next always reflects where the playlist will actually
+  // resume after the jukebox queue drains, rather than holding the stale
+  // value snapshotted at handoff time (which pointed to the song *after* the
+  // interrupted one, not the interrupted one itself).
+  // Only jukebox needs this correction — voting mode uses a separate interrupt
+  // path and its baseline is already managed correctly.
+  const cfg = getConfig();
+  if (cfg.viewer_control_mode === 'JUKEBOX' && name) {
+    const pendingInQueue = db.prepare(
+      `SELECT id FROM jukebox_queue WHERE played = 0 AND sequence_name = ? COLLATE NOCASE LIMIT 1`
+    ).get(name);
+    if (!pendingInQueue) {
+      setBaselineNext(name);
+    }
+  }
+
   const io = req.app.get('io');
   if (io) {
-    // While an interrupting song plays, FPP reports the next song in the
-    // voting/request playlist. Emit the baseline instead so socket-connected
-    // viewers see the main-playlist return point, consistent with /api/state.
+    // Emit the now-updated baseline (or fall back to name) so viewers see the
+    // correct main-playlist return point via the nextScheduled socket event.
     const npBaseline = db.prepare('SELECT baseline_next_sequence_name FROM now_playing WHERE id = 1').get();
     const emitName = (npBaseline && npBaseline.baseline_next_sequence_name) || name || null;
     io.emit('nextScheduled', { sequenceName: emitName });
