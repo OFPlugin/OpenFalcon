@@ -609,12 +609,17 @@
     // In templates we render server-side, we add data-showpilot-next to the NEXT_PLAYLIST spot.
     // The data-openfalcon-* selectors are kept for backward compat with templates
     // written against the old name.
-    const nextEl = document.querySelector('[data-showpilot-next], [data-openfalcon-next]');
-    if (nextEl) {
+    // querySelectorAll so templates that place {NEXT_PLAYLIST} both outside and
+    // inside the jukebox container (e.g. as the jukebox "Up Next" display) get
+    // every copy updated — querySelector would silently skip the second one.
+    const nextEls = document.querySelectorAll('[data-showpilot-next], [data-openfalcon-next]');
+    if (nextEls.length) {
       const nextDisplay = data.nextScheduled
         ? (data.sequences || []).find(s => s.name === data.nextScheduled)?.display_name || data.nextScheduled
         : '—';
-      if (nextEl.textContent !== nextDisplay) nextEl.textContent = nextDisplay;
+      nextEls.forEach(el => {
+        if (el.textContent !== nextDisplay) el.textContent = nextDisplay;
+      });
     }
 
     // --- Queue size & queue list ---
