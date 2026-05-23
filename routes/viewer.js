@@ -9,7 +9,7 @@ const crypto = require('crypto');
 const router = express.Router();
 const config = require('../lib/config-loader');
 const { db, getConfig, getNowPlaying, getActiveViewerCount, getSequenceByName, castTiebreakVote, getNextUp,
-        addRaceTap, getRaceTapCounts, resetRaceTaps, getRaceLeader } = require('../lib/db');
+        addRaceTap, getRaceTapCounts, resetRaceTaps, getRaceLeader, setBaselineNext } = require('../lib/db');
 const { bustCoverUrl } = require('../lib/cover-art');
 
 function ensureViewerToken(req, res) {
@@ -706,12 +706,30 @@ router.post('/jukebox/add', (req, res) => {
     }
   }
 
+  // Check emptiness BEFORE the insert so we know if this is the first song
+  // added to an otherwise-idle queue (the "clean queue" case).
+  const queueWasEmpty = db.prepare(
+    `SELECT COUNT(*) AS n FROM jukebox_queue WHERE played = 0`
+  ).get().n === 0;
+
   db.prepare(`
     INSERT INTO jukebox_queue (sequence_id, sequence_name, viewer_token)
     VALUES (?, ?, ?)
   `).run(seq.id, seq.name, token);
 
   db.prepare(`UPDATE config SET interactions_since_last_psa = interactions_since_last_psa + 1 WHERE id = 1`).run();
+
+  // First song into a clean queue — snapshot the currently-playing song as
+  // the jukebox baseline. In immediate-interrupt mode FPP resumes this song
+  // once the jukebox queue drains, so it is the correct "Up Next" return
+  // point. Only written when no baseline already exists (a still-active prior
+  // jukebox cycle should not be overwritten).
+  if (queueWasEmpty) {
+    const npNow = getNowPlaying();
+    if (npNow.sequence_name && !npNow.baseline_next_sequence_name) {
+      setBaselineNext(npNow.sequence_name);
+    }
+  }
 
   const io = req.app.get('io');
   if (io) {
