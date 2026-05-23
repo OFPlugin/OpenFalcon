@@ -421,6 +421,7 @@ router.get('/state', (req, res) => {
   // resumes, the original baseline is still where FPP will return to.
   if (response.winningVote || response.nextRequest || response.raceWinner) {
     const npState = db.prepare('SELECT next_sequence_name, baseline_next_sequence_name FROM now_playing WHERE id = 1').get();
+    console.log(`[plugin/state] handoff baseline="${npState?.baseline_next_sequence_name}" next="${npState?.next_sequence_name}" → ${!npState?.baseline_next_sequence_name && npState?.next_sequence_name ? 'SETTING baseline to ' + npState?.next_sequence_name : 'skipping'}`);
     if (npState && !npState.baseline_next_sequence_name && npState.next_sequence_name) {
       setBaselineNext(npState.next_sequence_name);
     }
@@ -521,6 +522,7 @@ router.post('/playing', (req, res) => {
   // baseline so subsequent "Up Next" display switches back to FPP's live report.
   if (isSequenceChange && name) {
     const npBaseline = db.prepare('SELECT baseline_next_sequence_name FROM now_playing WHERE id = 1').get();
+    console.log(`[playing/path1] isSequenceChange seq="${name}" baseline="${npBaseline?.baseline_next_sequence_name}" match=${npBaseline?.baseline_next_sequence_name === name}`);
     if (npBaseline && npBaseline.baseline_next_sequence_name === name) {
       setBaselineNext(null);
     }

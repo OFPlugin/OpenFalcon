@@ -722,12 +722,14 @@ router.post('/jukebox/add', (req, res) => {
   // Snapshot the main-playlist return point as the jukebox baseline so
   // "Up Next" shows the correct song while the jukebox queue plays through.
   const npNow = getNowPlaying();
+  console.log(`[jukebox/add] interrupt_schedule=${cfg.interrupt_schedule} queueWasEmpty=${queueWasEmpty} nowPlaying=${npNow.sequence_name} nextScheduled=${npNow.next_sequence_name}`);
   if (cfg.interrupt_schedule) {
     // Interrupt mode: FPP resumes the currently-playing song after the queue
     // drains, so the currently-playing song IS the return point.
     // Always overwrite (no queueWasEmpty guard) so a stale baseline from a
     // prior non-interrupt session never silently shows the wrong song.
     if (npNow.sequence_name) setBaselineNext(npNow.sequence_name);
+    console.log(`[jukebox/add] interrupt mode → set baseline=${npNow.sequence_name}`);
   } else if (queueWasEmpty) {
     // Non-interrupt mode: jukebox songs play AFTER the current song finishes,
     // so the return point is the next main-playlist song (Song B), not the
