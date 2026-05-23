@@ -719,15 +719,25 @@ router.post('/jukebox/add', (req, res) => {
 
   db.prepare(`UPDATE config SET interactions_since_last_psa = interactions_since_last_psa + 1 WHERE id = 1`).run();
 
-  // First song into a clean queue — snapshot the currently-playing song as
-  // the jukebox baseline. In immediate-interrupt mode FPP resumes this song
-  // once the jukebox queue drains, so it is the correct "Up Next" return
-  // point. Always overwrite (no stale-value guard) so a leftover baseline
-  // from a prior cycle or a previous code path never silently blocks this.
+  // First song into a clean queue — snapshot the main-playlist return point
+  // as the jukebox baseline so "Up Next" shows the correct song while the
+  // jukebox queue plays through.
   if (queueWasEmpty) {
     const npNow = getNowPlaying();
-    if (npNow.sequence_name) {
-      setBaselineNext(npNow.sequence_name);
+    if (cfg.interrupt_schedule) {
+      // Interrupt mode: FPP resumes the currently-playing song after the queue
+      // drains, so the currently-playing song IS the return point.
+      if (npNow.sequence_name) setBaselineNext(npNow.sequence_name);
+    } else {
+      // Non-interrupt mode: jukebox songs play AFTER the current song finishes,
+      // so the return point is the next main-playlist song (Song B), not the
+      // currently-playing one (Song A, which will have already played).
+      const npState = db.prepare(
+        'SELECT next_sequence_name FROM now_playing WHERE id = 1'
+      ).get();
+      if (npState && npState.next_sequence_name) {
+        setBaselineNext(npState.next_sequence_name);
+      }
     }
   }
 

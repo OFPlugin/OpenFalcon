@@ -572,22 +572,6 @@ router.post('/playing', (req, res) => {
     const cfgForRound = getConfig();
     console.log(`[playing] seq="${name}" source=${source} mode=${cfgForRound.viewer_control_mode} isChange=${isSequenceChange}`);
 
-    // When the actual jukebox/vote song starts playing, clear the baseline
-    // immediately and let Tier 4 (FPP's live next_sequence_name) take over.
-    // FPP will call /api/plugin/next right after with the correct return
-    // point — Song A in interrupt mode (resuming the interrupted song) or
-    // Song B in non-interrupt / voting mode (continuing the main playlist).
-    // Both cases end up correct without the baseline.
-    // PSA is intentionally excluded: PSAs are brief interludes that don't
-    // change the jukebox return point.
-    if (
-      isSequenceChange &&
-      (source === 'request' || source === 'vote') &&
-      (cfgForRound.viewer_control_mode === 'JUKEBOX' || cfgForRound.viewer_control_mode === 'VOTING')
-    ) {
-      setBaselineNext(null);
-    }
-
     // Belt-and-suspenders: also clear on a schedule song if queue is drained
     // and the baseline doesn't match what started (catches cases where the
     // /api/plugin/next call hasn't fired yet to update next_sequence_name).
