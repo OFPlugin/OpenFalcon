@@ -722,11 +722,11 @@ router.post('/jukebox/add', (req, res) => {
   // First song into a clean queue — snapshot the currently-playing song as
   // the jukebox baseline. In immediate-interrupt mode FPP resumes this song
   // once the jukebox queue drains, so it is the correct "Up Next" return
-  // point. Only written when no baseline already exists (a still-active prior
-  // jukebox cycle should not be overwritten).
+  // point. Always overwrite (no stale-value guard) so a leftover baseline
+  // from a prior cycle or a previous code path never silently blocks this.
   if (queueWasEmpty) {
     const npNow = getNowPlaying();
-    if (npNow.sequence_name && !npNow.baseline_next_sequence_name) {
+    if (npNow.sequence_name) {
       setBaselineNext(npNow.sequence_name);
     }
   }
