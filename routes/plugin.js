@@ -421,7 +421,6 @@ router.get('/state', (req, res) => {
   // resumes, the original baseline is still where FPP will return to.
   if (response.winningVote || response.nextRequest || response.raceWinner) {
     const npState = db.prepare('SELECT next_sequence_name, baseline_next_sequence_name FROM now_playing WHERE id = 1').get();
-    console.log(`[plugin/state] handoff baseline="${npState?.baseline_next_sequence_name}" next="${npState?.next_sequence_name}" → ${!npState?.baseline_next_sequence_name && npState?.next_sequence_name ? 'SETTING baseline to ' + npState?.next_sequence_name : 'skipping'}`);
     if (npState && !npState.baseline_next_sequence_name && npState.next_sequence_name) {
       setBaselineNext(npState.next_sequence_name);
     }
@@ -522,7 +521,6 @@ router.post('/playing', (req, res) => {
   // baseline so subsequent "Up Next" display switches back to FPP's live report.
   if (isSequenceChange && name) {
     const npBaseline = db.prepare('SELECT baseline_next_sequence_name FROM now_playing WHERE id = 1').get();
-    console.log(`[playing/path1] isSequenceChange seq="${name}" baseline="${npBaseline?.baseline_next_sequence_name}" match=${npBaseline?.baseline_next_sequence_name === name}`);
     if (npBaseline && npBaseline.baseline_next_sequence_name === name) {
       setBaselineNext(null);
     }
@@ -824,11 +822,46 @@ router.post('/next', (req, res) => {
 
   setNextScheduled(name || null);
 
+  // Interrupt-mode detection: cfg.interrupt_schedule may not be set when the
+  // FPP plugin manages its own interrupt flag independently. Instead, detect
+  // interrupt mode by observing FPP's behavior: when a jukebox song is playing
+  // and FPP reports the last scheduled song as "next," FPP is in interrupt mode
+  // and that song is the return point after the queue drains. Update the
+  // baseline now so Tier 3 immediately shows the correct song.
+  //
+  // In non-interrupt mode FPP reports null (end of request playlist) or the
+  // main-playlist continuation (Song B), which won't match the last scheduled
+  // song (Song A), so the existing baseline is left untouched.
+  if (name) {
+    const npNow = db.prepare('SELECT sequence_name FROM now_playing WHERE id = 1').get();
+    const nowPlayingName = npNow && npNow.sequence_name;
+    if (nowPlayingName) {
+      const isJukeboxPlaying = db.prepare(`
+        SELECT COUNT(*) AS n FROM jukebox_queue
+        WHERE sequence_name = ? COLLATE NOCASE
+          AND (played = 1 OR handed_off_at IS NOT NULL)
+      `).get(nowPlayingName).n > 0;
+      if (isJukeboxPlaying) {
+        const lastScheduled = db.prepare(`
+          SELECT sequence_name FROM play_history
+          WHERE source = 'schedule'
+          ORDER BY played_at DESC LIMIT 1
+        `).get();
+        if (lastScheduled && lastScheduled.sequence_name === name) {
+          const npBaseline = db.prepare('SELECT baseline_next_sequence_name FROM now_playing WHERE id = 1').get();
+          if (!npBaseline || npBaseline.baseline_next_sequence_name !== name) {
+            setBaselineNext(name);
+          }
+        }
+      }
+    }
+  }
+
   const io = req.app.get('io');
   if (io) {
-    // While an interrupting song plays, FPP reports the next song in the
-    // voting/request playlist. Emit the baseline instead so socket-connected
-    // viewers see the main-playlist return point, consistent with /api/state.
+    // Emit the baseline if set (main-playlist return point), otherwise FPP's
+    // live report. The baseline update above runs first so interrupt mode
+    // immediately emits the correct return song.
     const npBaseline = db.prepare('SELECT baseline_next_sequence_name FROM now_playing WHERE id = 1').get();
     const emitName = (npBaseline && npBaseline.baseline_next_sequence_name) || name || null;
     io.emit('nextScheduled', { sequenceName: emitName });
