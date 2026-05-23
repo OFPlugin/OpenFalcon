@@ -372,6 +372,33 @@ router.get('/state', (req, res) => {
       rememberHandoff(next.sequence_name, 'request');
       const io = req.app.get('io');
       if (io) io.emit('queueUpdated');
+    } else {
+      // No fresh entry to hand off. In non-interrupt mode FPP polls many
+      // times between the handoff and when the current song actually ends;
+      // if we return nothing on those polls FPP drops the queued song and
+      // resumes its main playlist. Re-return the already-handed-off but
+      // not-yet-confirmed-played entry so FPP keeps it queued.
+      // Also refresh handed_off_at so cleanupStaleHandoffs doesn't expire
+      // it while a long song is still playing.
+      const pending = db.prepare(`
+        SELECT q.sequence_name, q.requested_at, s.sort_order
+        FROM jukebox_queue q
+        LEFT JOIN sequences s ON s.name = q.sequence_name COLLATE NOCASE
+        WHERE q.played = 0 AND q.handed_off_at IS NOT NULL
+        ORDER BY q.requested_at ASC LIMIT 1
+      `).get();
+      if (pending) {
+        db.prepare(
+          `UPDATE jukebox_queue SET handed_off_at = CURRENT_TIMESTAMP
+           WHERE sequence_name = ? AND played = 0 AND handed_off_at IS NOT NULL`
+        ).run(pending.sequence_name);
+        rememberHandoff(pending.sequence_name, 'request');
+        response.nextRequest = {
+          sequence: pending.sequence_name,
+          playlistIndex: pending.sort_order,
+          queuedAt: pending.requested_at,
+        };
+      }
     }
   } else if (cfg.viewer_control_mode === 'RACE') {
     // Race mode: plugin v0.13.58+ handles RACE natively via the raceWinner
