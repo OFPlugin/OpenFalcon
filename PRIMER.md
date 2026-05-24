@@ -404,7 +404,7 @@ If `fppPos` and `audioPos` differ significantly but `drift` shows ~0ms, that's e
 | 0.13.64 | `set_mode_race.php` scheduler command. Calls `POST /api/plugin/viewer-mode` with `{ mode: "RACE" }` so FPP scheduler events can activate race mode at a specific playlist position. |
 
 **Current versions (as of May 2026):**
-- ShowPilot: v0.33.192
+- ShowPilot: v0.33.193
 - FPP Plugin / Audio Daemon: v0.13.64
 - rf-compat.js cache buster: v=77
 
