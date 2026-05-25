@@ -2628,7 +2628,10 @@
     const coverEl = panel.querySelector('#of-listen-cover');
     const statusEl = panel.querySelector('#of-listen-status');
     statusEl.textContent = _pt('Preparing…');
-    const driftEl = panel.querySelector('#of-listen-drift');
+    // Only show the drift/calibration readout when player stats are enabled in admin
+    // Settings → Debug. When off, set driftEl to null so all downstream writes are no-ops.
+    const playerStatsEnabled = !!(window.__SHOWPILOT__ && window.__SHOWPILOT__.playerStatsEnabled);
+    const driftEl = playerStatsEnabled ? panel.querySelector('#of-listen-drift') : null;
     const playBtn = panel.querySelector('#of-listen-playpause');
     const muteBtn = panel.querySelector('#of-listen-mute');
     const minBtn = panel.querySelector('#of-listen-min');
@@ -3144,9 +3147,10 @@
 
     // ---- Initialization (when panel first opens) ----
     // ---- Debug overlay ----
-    // Add ?debug=1 to URL to show sync details on phone.
+    // Add ?debug=1 to URL, or enable via admin Settings → Debug, to show sync details.
     // Shows: drift, FPP position, clockOffset, playbackRate, Socket.io latency.
-    const debugMode = new URLSearchParams(window.location.search).get('debug') === '1';
+    const debugMode = new URLSearchParams(window.location.search).get('debug') === '1'
+      || !!(window.__SHOWPILOT__ && window.__SHOWPILOT__.debugOverlayEnabled);
     let debugEl = null;
     if (debugMode) {
       debugEl = document.createElement('div');

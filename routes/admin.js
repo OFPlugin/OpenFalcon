@@ -245,6 +245,8 @@ router.put('/config', requireAdmin, (req, res) => {
     'audio_sync_offset_ms',
     'audio_daemon_port',
     'viewer_source_obfuscate',
+    'debug_overlay_enabled',
+    'player_stats_enabled',
     'pwa_admin_enabled',
     'pwa_viewer_enabled',
     'pwa_viewer_name',

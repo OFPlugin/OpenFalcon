@@ -391,6 +391,7 @@ If `fppPos` and `audioPos` differ significantly but `drift` shows ~0ms, that's e
 | 0.33.190 | Move Translation settings to Viewer Page tab as a sub-tab (Template Editor + Translation). |
 | 0.33.191 | Fix viewer page sub-tabs layout: use sub-tabs class in card wrapper so tabs render horizontally. querySelectorAll live updates: `.now-playing-text`, `[data-showpilot-next]`, `[data-showpilot-queue-size]`, `[data-showpilot-queue-list]` now update all matching DOM copies (fixes templates with duplicate `{PLAYLISTS}` / `{NEXT_PLAYLIST}` blocks). Jukebox handoff re-return: when no fresh entry to hand off, re-returns the already-handed-off-but-not-confirmed-played entry so FPP keeps it queued in non-interrupt mode. Baseline snapshot on jukebox add: captures return point at first add. Interrupt-mode auto-detection in `/next`. `nextScheduled` socket listener added to rf-compat. rf-compat v=77. |
 | 0.33.172 | Fix audio_cache_files schema: `hash TEXT PRIMARY KEY` prevented storing multiple language variants (SQLite only allows one row per hash). Migration rebuilds the table with `id INTEGER PRIMARY KEY AUTOINCREMENT` and `UNIQUE(media_name, language)` — one row per file+language combination, hash is a plain column. All upserts in `storeUploadedFile`, `storeLanguageFile`, `linkMediaNameToHash` updated to use `ON CONFLICT(media_name, language)`. |
+| 0.33.194 | Audio debug UI off by default. Sync debug overlay (`?debug=1` equivalent) and player bar drift/calibration stats are now hidden unless enabled. New admin Settings → Debug sub-tab with two checkboxes: "Show sync debug overlay on viewer page" and "Show audio stats in player bar". Both default off. Bootstrap passes `debugOverlayEnabled` and `playerStatsEnabled`; rf-compat gates the overlay and `driftEl` on those flags. |
 
 **Plugin version history (this session):**
 | Version | Change |
@@ -404,7 +405,7 @@ If `fppPos` and `audioPos` differ significantly but `drift` shows ~0ms, that's e
 | 0.13.64 | `set_mode_race.php` scheduler command. Calls `POST /api/plugin/viewer-mode` with `{ mode: "RACE" }` so FPP scheduler events can activate race mode at a specific playlist position. |
 
 **Current versions (as of May 2026):**
-- ShowPilot: v0.33.193
+- ShowPilot: v0.33.194
 - FPP Plugin / Audio Daemon: v0.13.64
 - rf-compat.js cache buster: v=77
 

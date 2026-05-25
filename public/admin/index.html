@@ -1825,7 +1825,7 @@
           <rect class="lp" x="8"   y="-3"  width="5" height="5" rx="1"/>
         </svg>
         <span class="app-brand-text">ShowPilot</span>
-        <span class="app-version">v0.33.193</span>
+        <span class="app-version">v0.33.194</span>
       </span>
       <span id="modePill" class="mode-pill off">OFF</span>
       <span class="header-spacer"></span>
@@ -2752,6 +2752,7 @@
             <div class="sub-tab" data-subtab="public-access" onclick="switchTab('public-access')">Public Access</div>
             <div class="sub-tab" data-subtab="backup" onclick="switchTab('backup')">Backup &amp; Restore</div>
             <div class="sub-tab" data-subtab="updates" onclick="switchTab('updates')">Updates</div>
+            <div class="sub-tab" data-subtab="debug" onclick="switchTab('debug')">Debug</div>
           </div>
 
           <!-- GENERAL SETTINGS — applies to all templates -->
@@ -3399,7 +3400,34 @@
               <button id="updateRollbackBtn" class="secondary" onclick="rollbackUpdate()" style="display: none;">Roll back to previous version</button>
             </div>
 
-            <div id="updateActionStatus" class="muted" style="margin-top: 0.75rem; font-size: 0.85rem;"></div>
+            <div id=\"updateActionStatus\" class=\"muted\" style=\"margin-top: 0.75rem; font-size: 0.85rem;\"></div>
+          </div>
+
+          <!-- DEBUG — diagnostics toggles for audio sync troubleshooting (v0.33.194+) -->
+          <div class="sub-tab-pane" data-subtab="debug">
+            <p class="muted" style="font-size: 0.85rem; margin: 0 0 1rem;">
+              Diagnostics for audio sync troubleshooting. Both options are off by default
+              and intended for temporary use — they expose internal state to all visitors.
+            </p>
+            <div class="row">
+              <input type="checkbox" id="cfg_debug_overlay_enabled"
+                     onchange="saveSetting('debug_overlay_enabled', this.checked ? 1 : 0)" />
+              <label for="cfg_debug_overlay_enabled" style="margin: 0;">Show sync debug overlay on viewer page</label>
+            </div>
+            <p class="muted" style="font-size: 0.8rem; margin: 0.25rem 0 1rem 1.5rem;">
+              Displays a live readout (drift, FPP position, clock offset, calibration) pinned to
+              the top of the viewer page for every visitor. Equivalent to appending
+              <code>?debug=1</code> to the URL. Turn off when done.
+            </p>
+            <div class="row">
+              <input type="checkbox" id="cfg_player_stats_enabled"
+                     onchange="saveSetting('player_stats_enabled', this.checked ? 1 : 0)" />
+              <label for="cfg_player_stats_enabled" style="margin: 0;">Show audio stats in player bar</label>
+            </div>
+            <p class="muted" style="font-size: 0.8rem; margin: 0.25rem 0 0 1.5rem;">
+              Shows the drift and calibration readout in the small status line inside the
+              Listen on Phone player bar. Useful for per-device sync tuning. Turn off when done.
+            </p>
           </div>
         </div>
 
@@ -5336,6 +5364,8 @@
       setVal('cfg_audio_sync_offset_ms', c.audio_sync_offset_ms || 0);
       setVal('cfg_audio_daemon_port', c.audio_daemon_port || 8090);
       setChk('cfg_viewer_source_obfuscate', c.viewer_source_obfuscate);
+      setChk('cfg_debug_overlay_enabled', c.debug_overlay_enabled);
+      setChk('cfg_player_stats_enabled', c.player_stats_enabled);
 
       setChk('cfg_pwa_admin_enabled', c.pwa_admin_enabled);
       setChk('cfg_pwa_viewer_enabled', c.pwa_viewer_enabled);
